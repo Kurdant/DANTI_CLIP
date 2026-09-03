@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Generated output
+output/
+
+# Base de donnees SQLite (contient hash de mots de passe + sessions) - JAMAIS commit
+data/
+*.db
+*.db.wal
+*.db-shm
+
+# Fonds video (assets utilisateur, volumineux / droits)
+assets/backgrounds/
+
+# Framework d'agents interne (BYAN/BMAD) + runtime opencode - pas l'app
+_byan/
+.opencode/
+
+# Env / secrets (cle API Groq, mot de passe admin) - JAMAIS commit
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+.idea/
