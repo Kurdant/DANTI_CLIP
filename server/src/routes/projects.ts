@@ -7,6 +7,7 @@ import {
   getIdeas,
   getScripts,
   getVoices,
+  getVideos,
   getProjectRow,
 } from "../lib/serialize.js";
 
@@ -29,12 +30,13 @@ export function projectsRouter(env: ServerEnv): Router {
     const parsed = createProjectSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, "Donnees invalides");
     const { topic, mode, title } = parsed.data;
-    const finalTitle = title ?? topic.slice(0, 80);
+    const topicVal = (topic ?? "").trim();
+    const finalTitle = title || topicVal.slice(0, 80) || (mode === "auto" ? "Nouveau projet" : "Mon idee");
 
     const info = dbQuery(
       env,
       "INSERT INTO projects (user_id, title, topic, mode) VALUES (?, ?, ?, ?)",
-      [req.auth!.userId, finalTitle, topic, mode],
+      [req.auth!.userId, finalTitle, topicVal, mode],
     ).run();
 
     const row = getProjectRow(env, Number(info.lastInsertRowid), req.auth!.userId)!;
@@ -52,6 +54,7 @@ export function projectsRouter(env: ServerEnv): Router {
         ideas: getIdeas(env, project.id),
         scripts: getScripts(env, project.id),
         voices: getVoices(env, project.id),
+        videos: getVideos(env, project.id),
       },
     });
   }));

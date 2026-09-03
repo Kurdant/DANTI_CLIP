@@ -54,9 +54,10 @@ async function main() {
     }
     console.log(`\nGeneration d'idees pour : "${topic}" (provider=${llm.name})\n`);
     const raw = await llm.complete(messagesIdees({ topic, nIdeas: config.nIdeas, language: config.language }));
-    const { idees } = extractJson<{ idees: { idee: string; hook: string; fond: string }[] }>(raw);
+    const { idees } = extractJson<{ idees: { sujet: string; titre: string; hook: string; fond: string }[] }>(raw);
     idees.forEach((id, i) => {
-      console.log(`[${i + 1}] ${id.idee}`);
+      console.log(`[${i + 1}] ${id.titre || id.sujet}`);
+      console.log(`    SUJET : ${id.sujet}`);
       console.log(`    HOOK : ${id.hook}`);
       console.log(`    FOND : ${id.fond}\n`);
     });
@@ -78,9 +79,9 @@ async function main() {
   const res = await genererShort(config, llm, topic, { ideaIndex });
 
   console.log("--- IDEES GENEREES ---");
-  res.idees.forEach((id, i) => console.log(`  [${i + 1}] ${id.idee}  (hook: ${id.hook})`));
+  res.idees.forEach((id, i) => console.log(`  [${i + 1}] ${id.sujet}  (hook: ${id.hook})`));
   console.log(`\n--- IDEE RETENUE [${res.idees.indexOf(res.ideaRetenue) + 1}] ---`);
-  console.log(`  ${res.ideaRetenue.idee}`);
+  console.log(`  ${res.ideaRetenue.sujet}`);
 
   console.log("\n--- SCRIPT ---");
   console.log(`  Titre : ${res.script.titre}`);

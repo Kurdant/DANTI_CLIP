@@ -32,10 +32,12 @@ export class MockProvider implements LlmProvider {
     }
 
     if (isIdees) {
-      const ideas = Array.from({ length: 4 }).map((_, i) => ({
-        idee: `Idee numero ${i + 1} autour de ton sujet`,
+      const ideas = Array.from({ length: 3 }).map((_, i) => ({
+        sujet: `Sujet distinct n°${i + 1} (une direction differente)`,
+        titre: `Titre accrocheur n°${i + 1}`,
         hook: `Hook accrocheur n°${i + 1}`,
         angle: i % 2 === 0 ? "curiosite" : "contraire-a-l'opinion-courante",
+        fond: `Fond animé n°${i + 1}`,
       }));
       return JSON.stringify({ idees: ideas });
     }

@@ -50,15 +50,21 @@ export interface VoixInfo {
 }
 
 /**
- * Liste les voix FR disponibles (avec personnalites) pour choisir la voix "droles/engageante".
+ * Liste les voix adaptees au francais : toutes les voix FR + les voix
+ * "Multilingual" (très expressives, qui s'adaptent/auto-detectent le francais).
  */
 export async function listerVoixFr(): Promise<VoixInfo[]> {
   const manager = await UniversalVoicesManager.create();
-  const fran = manager.find({ Language: "fr" });
-  return (fran as unknown as Voice[]).map((v) => ({
-    name: v.ShortName,
-    locale: v.Locale,
-    gender: v.Gender,
-    personalities: v.VoiceTag?.VoicePersonalities ?? [],
-  }));
+  const all = manager.find({}) as unknown as Voice[];
+  const selected = all.filter(
+    (v) => v.Locale?.startsWith("fr") || /Multilingual/i.test(v.ShortName),
+  );
+  return selected
+    .sort((a, b) => a.Locale.localeCompare(b.Locale) || a.ShortName.localeCompare(b.ShortName))
+    .map((v) => ({
+      name: v.ShortName,
+      locale: v.Locale,
+      gender: v.Gender,
+      personalities: v.VoiceTag?.VoicePersonalities ?? [],
+    }));
 }

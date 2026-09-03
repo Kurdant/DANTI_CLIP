@@ -6,7 +6,7 @@ export const loginSchema = z.object({
 });
 
 export const createProjectSchema = z.object({
-  topic: z.string().trim().min(1).max(500),
+  topic: z.string().trim().max(500).optional(), // vide => l'IA invente librement 3 sujets
   mode: z.enum(["auto", "manual"]),
   title: z.string().trim().min(1).max(200).optional(),
 });

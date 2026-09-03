@@ -46,7 +46,7 @@ export async function genererShort(
 
   // 2) SCRIPT
   const scriptRaw = await llm.complete(
-    messagesScript({ idea: ideaRetenue.idee, language: config.language }),
+    messagesScript({ idea: ideaRetenue.sujet, language: config.language }),
   );
   const script = extractJson<ScriptResult>(scriptRaw);
 

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import fs from "node:fs";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { ServerEnv } from "../lib/env.js";
 import { asyncHandler, ApiError, requireAuth, csrfProtect } from "../auth/middleware.js";
 import { dbQuery } from "../auth/middleware.js";
@@ -8,6 +10,7 @@ import { backgroundSchema } from "../validate/schemas.js";
 import { getProjectRow } from "../lib/serialize.js";
 import { resolveWithin } from "../lib/fspath.js";
 
+const execFileAsync = promisify(execFile);
 const VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".mkv", ".avi"]);
 
 function scanBackgrounds(dir: string): string[] {
@@ -21,6 +24,10 @@ function scanBackgrounds(dir: string): string[] {
   }
 }
 
+function thumbsDir(env: ServerEnv): string {
+  return path.resolve(env.outputDir, "thumbs");
+}
+
 export function backgroundsRouter(env: ServerEnv): Router {
   const router = Router();
 
@@ -31,8 +38,23 @@ export function backgroundsRouter(env: ServerEnv): Router {
       backgrounds: files.map((f) => ({
         fileName: f,
         downloadUrl: `/api/backgrounds/download/${encodeURIComponent(f)}`,
+        thumbUrl: `/api/backgrounds/thumb/${encodeURIComponent(f)}`,
       })),
     });
+  }));
+
+  // Miniature (1er frame) d'un fond video — cachee a la volee.
+  router.get("/backgrounds/thumb/:fileName", asyncHandler(async (req, res) => {
+    const target = resolveWithin(env.backgroundsDir, String(req.params.fileName));
+    if (!target || !fs.existsSync(target)) throw new ApiError(404, "Fond introuvable");
+    const tDir = thumbsDir(env);
+    fs.mkdirSync(tDir, { recursive: true });
+    const thumb = path.join(tDir, "t_" + String(req.params.fileName).replace(/[^a-zA-Z0-9._-]/g, "_") + ".jpg");
+    if (!fs.existsSync(thumb)) {
+      await execFileAsync("ffmpeg", ["-y", "-ss", "0.4", "-i", target, "-frames:v", "1", "-vf", "scale=270:480", thumb]).catch(() => undefined);
+    }
+    if (!fs.existsSync(thumb)) throw new ApiError(404, "Miniature indisponible");
+    res.sendFile(thumb);
   }));
 
   // Telecharger un fond video (protection traversal).

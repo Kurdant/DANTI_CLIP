@@ -12,6 +12,7 @@ import { projectsRouter } from "./routes/projects.js";
 import { workflowRouter } from "./routes/workflow.js";
 import { backgroundsRouter } from "./routes/backgrounds.js";
 import { audioRouter } from "./routes/audio.js";
+import { videosRouter } from "./routes/videos.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const env = loadServerEnv();
@@ -69,6 +70,7 @@ app.use("/api", backgroundsRouter(env));
 app.use("/api", workflowRouter(env));
 app.use("/api", projectsRouter(env));
 app.use("/api", audioRouter(env));
+app.use("/api", videosRouter(env));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

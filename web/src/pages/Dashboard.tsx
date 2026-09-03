@@ -85,7 +85,7 @@ export function DashboardPage() {
                 className={"btn sm " + (mode === "auto" ? "" : "secondary")}
                 onClick={() => setMode("auto")}
               >
-                L'IA génère une idée
+                L'IA propose 3 sujets
               </button>
               <button
                 className={"btn sm " + (mode === "manual" ? "" : "secondary")}
@@ -96,21 +96,21 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="field">
-            <label>{mode === "auto" ? "Sujet / thème" : "Ton idée de vidéo"}</label>
+            <label>{mode === "auto" ? "Direction / thème (optionnel)" : "Thème / sujet *"}</label>
             <textarea
               className="input"
               rows={mode === "manual" ? 3 : 2}
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder={mode === "auto" ? "ex : pourquoi on procrastine" : "Décris ton idée de vidéo…"}
+              placeholder={mode === "auto" ? "Laisse vide pour que l'IA invente 3 sujets, ou donne une direction" : "Décris ton thème de vidéo…"}
             />
           </div>
           <div className="field">
-            <label>Titre du projet (optionnel)</label>
+            <label>{mode === "manual" ? "Titre de la vidéo" : "Titre du projet (optionnel)"}</label>
             <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="row">
-            <button className="btn" disabled={busy || !topic.trim()} onClick={create}>
+            <button className="btn" disabled={busy || (mode === "manual" && !topic.trim())} onClick={create}>
               {busy ? "Création…" : "Créer le projet"}
             </button>
             <button className="btn secondary" onClick={() => setShowForm(false)}>Annuler</button>

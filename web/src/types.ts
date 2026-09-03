@@ -2,6 +2,7 @@ export interface Idea {
   id: number;
   position: number;
   ideaText: string;
+  titre: string | null;
   hook: string | null;
   angle: string | null;
   fond: string | null;
@@ -33,6 +34,13 @@ export interface VoiceDto {
   duration: number | null;
 }
 
+export interface VideoDto {
+  id: number;
+  url: string;
+  downloadUrl: string;
+  duration: number | null;
+}
+
 export interface Project {
   id: number;
   title: string;
@@ -43,16 +51,19 @@ export interface Project {
   selectedScriptId: number | null;
   selectedVoiceId: number | null;
   selectedBackground: string | null;
+  textStyle: string;
   createdAt: string;
   updatedAt: string;
   ideas?: Idea[];
   scripts?: ScriptDto[];
   voices?: VoiceDto[];
+  videos?: VideoDto[];
 }
 
 export interface Background {
   fileName: string;
   downloadUrl: string;
+  thumbUrl: string;
 }
 
 export interface VoiceOption {

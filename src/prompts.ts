@@ -29,7 +29,8 @@ REGLES ABSOLUES (non negociables) :
 // 1) Generation d'IDEES
 // ------------------------------------------------------------
 export interface Idear {
-  idee: string;
+  sujet: string; // sujet / theme distinct de la video (le concept)
+  titre: string; // titre accrocheur de la video
   hook: string;
   angle: "curiosite" | "contraire" | "astuce" | "histoire" | "chiffre" | "controverse-safe";
   fond: string; // description du fond/visuel a afficher (utilise par le montage)
@@ -40,24 +41,31 @@ export interface IdeasResult {
 }
 
 export function messagesIdees(opts: {
-  topic: string;
+  topic: string; // si vide => l'IA invente librement 3 sujets
   nIdeas: number;
   language?: string;
 }): LlmMessage[] {
   const { topic, nIdeas, language = "fr" } = opts;
+  const hasTopic = topic.trim().length > 0;
 
   const system = REGLES_COMMUNES +
-    `\nFournis exactement ${nIdeas} idees de videos courtes et virales.
-Chaque idee doit : avoir un angle fort, un hook qui accroche en 1 seconde,
-et etre un sujet qui IMPACTE / intrigue / fait reflechir sans jamais deborder.
-Le champ "fond" decrit le visuel de fond (image, ecran, gameplay, animation) en 1 phrase.`;
+    `\nFournis exactement ${nIdeas} SUJETS DE VIDEOS COMPLETEMENT DIFFERENTS ET DISTINCTS.
+IMPORTANT : chaque sujet doit etre une direction vraiment a part (thematique, angle, univers)
+et non une simple variation du meme sujet. Si un sujet est fourni comme direction, inspire-toi en
+mais varie fortement ; si aucun sujet n'est fourni, invente librement ${nIdeas} sujets differents.
+Chaque idee doit : etre un sujet qui IMPACTE / intrigue / fait reflechir sans jamais deborder,
+avoir un hook qui accroche en 1 seconde, et un titre percutant.`;
+  const directive = hasTopic
+    ? `Direction / theme general (facultatif, inspire-toi en) : "${topic}"`
+    : `Aucun sujet impose : invente librement.`;
 
-  const user = `Sujet / theme : "${topic}"
+  const user = `${directive}
 Langue : ${language}
 Reponds avec ce schema JSON exact :
 {
   "idees": [
-    { "idee": "titre clair de la video",
+    { "sujet": "le sujet / theme distinct de la video",
+      "titre": "titre accrocheur de la video",
       "hook": "phrase d'accroche des 3 premieres secondes",
       "angle": "curiosite | contraire | astuce | histoire | chiffre | controverse-safe",
       "fond": "description du visuel de fond en 1 phrase courte" }

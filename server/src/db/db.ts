@@ -47,6 +47,7 @@ export function getDb(env: ServerEnv): DatabaseSync {
       selected_script_id   INTEGER,
       selected_voice_id    INTEGER,
       selected_background  TEXT,
+      text_style           TEXT NOT NULL DEFAULT 'classic',
       created_at           TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -56,6 +57,7 @@ export function getDb(env: ServerEnv): DatabaseSync {
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       position   INTEGER NOT NULL,
       idea_text  TEXT NOT NULL,
+      titre      TEXT,
       hook       TEXT,
       angle      TEXT,
       fond       TEXT,
@@ -76,6 +78,16 @@ export function getDb(env: ServerEnv): DatabaseSync {
       script_id  INTEGER REFERENCES scripts(id) ON DELETE SET NULL,
       voice_name TEXT NOT NULL,
       file_name  TEXT NOT NULL,
+      subs_file  TEXT,
+      wb_file    TEXT,
+      duration   REAL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS videos (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      file_name  TEXT NOT NULL,
       duration   REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -84,7 +96,27 @@ export function getDb(env: ServerEnv): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_ideas_project   ON ideas(project_id);
     CREATE INDEX IF NOT EXISTS idx_scripts_project ON scripts(project_id);
     CREATE INDEX IF NOT EXISTS idx_voices_project  ON voices(project_id);
+    CREATE INDEX IF NOT EXISTS idx_videos_project  ON videos(project_id);
   `);
+
+  // Migration : ajoute la colonne `titre` si elle n'existe pas (base existante).
+  const ideaCols = instance.prepare("PRAGMA table_info(ideas)").all() as { name: string }[];
+  if (!ideaCols.some((c) => c.name === "titre")) {
+    instance.exec("ALTER TABLE ideas ADD COLUMN titre TEXT;");
+  }
+  // Migration : ajoute la colonne `subs_file` si elle n'existe pas.
+  const voiceCols = instance.prepare("PRAGMA table_info(voices)").all() as { name: string }[];
+  if (!voiceCols.some((c) => c.name === "subs_file")) {
+    instance.exec("ALTER TABLE voices ADD COLUMN subs_file TEXT;");
+  }
+  if (!voiceCols.some((c) => c.name === "wb_file")) {
+    instance.exec("ALTER TABLE voices ADD COLUMN wb_file TEXT;");
+  }
+  // Migration : ajoute la colonne `text_style` si elle n'existe pas.
+  const projCols = instance.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
+  if (!projCols.some((c) => c.name === "text_style")) {
+    instance.exec("ALTER TABLE projects ADD COLUMN text_style TEXT NOT NULL DEFAULT 'classic';");
+  }
 
   db = instance;
   return instance;
