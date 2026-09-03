@@ -5,6 +5,16 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(512),
 });
 
+export const registerSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .min(3, "Nom trop court (min 3 caracteres)")
+    .max(30, "Nom trop long (max 30)")
+    .regex(/^[a-zA-Z0-9_.-]+$/, "Caracteres autorises : lettres, chiffres, _ . -"),
+  password: z.string().min(8, "Mot de passe trop court (min 8 caracteres)").max(512),
+});
+
 export const createProjectSchema = z.object({
   topic: z.string().trim().max(500).optional(), // vide => l'IA invente librement 3 sujets
   mode: z.enum(["auto", "manual"]),

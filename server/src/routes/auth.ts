@@ -2,12 +2,39 @@ import { Router } from "express";
 import type { ServerEnv } from "../lib/env.js";
 import { getDb } from "../db/db.js";
 import { dbQuery, asyncHandler, ApiError, loginRateLimit, requireAuth, resetLoginAttempts } from "../auth/middleware.js";
-import { verifyPassword } from "../auth/passwords.js";
+import { verifyPasswordOrDummy, hashPassword } from "../auth/passwords.js";
 import { createSession, destroySession, getUser, setSessionCookie, clearSessionCookie } from "../auth/sessions.js";
-import { loginSchema } from "../validate/schemas.js";
+import { loginSchema, registerSchema } from "../validate/schemas.js";
 
 export function authRouter(env: ServerEnv): Router {
   const router = Router();
+
+  // --- Inscription de compte (auto-login) ---
+  router.post(
+    "/auth/register",
+    loginRateLimit,
+    asyncHandler(async (req, res) => {
+      const parsed = registerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const msg = parsed.error.issues[0]?.message ?? "Donnees invalides";
+        throw new ApiError(400, msg);
+      }
+      const { username, password } = parsed.data;
+
+      const existing = dbQuery(env, "SELECT id FROM users WHERE username = ?", [username]).get();
+      if (existing) throw new ApiError(400, "Ce nom d'utilisateur n'est pas disponible");
+
+      const hash = await hashPassword(password);
+      const info = dbQuery(env, "INSERT INTO users (username, password_hash) VALUES (?, ?)", [username, hash]).run();
+      const resetLoginAttemptsReq = req;
+
+      const session = createSession(env, Number(info.lastInsertRowid));
+      resetLoginAttempts(resetLoginAttemptsReq);
+      setSessionCookie(res, session.token, env);
+
+      res.status(201).json({ user: { username } });
+    }),
+  );
 
   router.post(
     "/auth/login",
@@ -25,8 +52,8 @@ export function authRouter(env: ServerEnv): Router {
         [username],
       ).get() as { id: number; password_hash: string } | undefined;
 
-      // Message unique : ne revele pas si le compte existe.
-      const valid = row && verifyPassword(password, row.password_hash);
+      // Message unique + timing egalise : ne revele pas si le compte existe.
+      const valid = await verifyPasswordOrDummy(password, row?.password_hash ?? null);
       if (!valid) {
         throw new ApiError(401, "Identifiants invalides");
       }

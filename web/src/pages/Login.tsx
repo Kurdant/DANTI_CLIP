@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export function LoginPage() {
@@ -41,6 +41,9 @@ export function LoginPage() {
         <button className="btn block" disabled={busy || !username || !password}>
           {busy ? "Connexion…" : "Se connecter"}
         </button>
+        <p className="sub" style={{ marginTop: 14, textAlign: "center" }}>
+          Pas de compte ? <Link to="/register">Créer un compte</Link>
+        </p>
       </form>
     </div>
   );

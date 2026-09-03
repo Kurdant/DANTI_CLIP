@@ -85,5 +85,10 @@ export function setSessionCookie(res: Response, token: string, env: ServerEnv): 
 
 export function clearSessionCookie(res: Response, env: ServerEnv): void {
   const name = env.cookieSecure ? `__Host-${COOKIE_NAME}` : COOKIE_NAME;
-  res.clearCookie(name, { path: "/" });
+  res.clearCookie(name, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "strict",
+    secure: env.cookieSecure,
+  });
 }

@@ -19,6 +19,7 @@ const env = loadServerEnv();
 
 const app = express();
 app.disable("x-powered-by");
+if (env.trustProxy > 0) app.set("trust proxy", env.trustProxy);
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -31,6 +32,7 @@ app.use(helmet({
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
+      formAction: ["'self'"],
       frameAncestors: ["'none'"],
     },
   },
@@ -53,6 +55,7 @@ app.use((req, res, next) => {
   const isPublic =
     p === "/api/health" ||
     p === "/api/auth/login" ||
+    p === "/api/auth/register" ||
     (req.method === "GET" && p.startsWith("/api/backgrounds"));
   if (isPublic) return next();
   if (!req.auth) return next(new ApiError(401, "Authentification requise"));
@@ -91,12 +94,16 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   if (err instanceof ApiError) {
     return res.status(err.status).json({ error: err.message });
   }
-  console.error(err);
-  res.status(500).json({ error: "Erreur interne" });
+  // Erreur de parsing JSON => requerant invalide (400), pas une erreur interne.
+  const status =
+    (err as { status?: number; type?: string })?.type === "entity.parse.failed" ? 400
+    : (err as { status?: number })?.status ?? 500;
+  if (status >= 500) console.error(err);
+  res.status(status).json({ error: status >= 500 ? "Erreur interne" : "Requete invalide" });
 });
 
 // Seed admin au demarrage (si absent) + log
-const seedMsg = seedAdmin(env);
+const seedMsg = await seedAdmin(env);
 console.log(`[db] ${seedMsg}`);
 
 app.listen(env.port, () => {

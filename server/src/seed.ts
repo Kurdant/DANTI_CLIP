@@ -13,7 +13,7 @@ interface Db {
  * Cree (ou met a jour si force) l'utilisateur admin depuis l'env.
  * Retourne un message de statut.
  */
-export function seedAdmin(env: ServerEnv, force = false): string {
+export async function seedAdmin(env: ServerEnv, force = false): Promise<string> {
   if (!env.adminUsername || !env.adminPassword) {
     return "Config admin absente : renseigne ADMIN_USERNAME et ADMIN_PASSWORD dans .env";
   }
@@ -25,7 +25,7 @@ export function seedAdmin(env: ServerEnv, force = false): string {
   const existing = db
     .prepare("SELECT id FROM users WHERE username = ?")
     .get(env.adminUsername);
-  const hash = hashPassword(env.adminPassword);
+  const hash = await hashPassword(env.adminPassword);
 
   if (existing && !force) {
     return "Admin deja present : ok (mode non force, mot de passe inchange)";

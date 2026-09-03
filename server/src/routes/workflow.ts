@@ -112,7 +112,8 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
     touchUpdated(env, project.id);
     jobs.set(key, { step: "done", progress: 1, running: false });
   } catch (e) {
-    jobs.set(key, { step: "error", progress: 0, running: false, error: e instanceof Error ? e.message : "Erreur rendu" });
+    console.error("[video] erreur rendu:", e);
+    jobs.set(key, { step: "error", progress: 0, running: false, error: "Erreur pendant le rendu de la video" });
   }
 }
 
@@ -184,7 +185,8 @@ async function runFullCreation(env: ServerEnv, project: ProjectRowLite, jobs: Jo
     setJob("rendu", 0.8);
     await startVideoRender(env, proj, jobs);
   } catch (e) {
-    jobs.set(key, { step: "error", progress: 0, running: false, error: e instanceof Error ? e.message : "Erreur" });
+    console.error("[full] erreur:", e);
+    jobs.set(key, { step: "error", progress: 0, running: false, error: "Erreur pendant la creation complete" });
   }
 }
 

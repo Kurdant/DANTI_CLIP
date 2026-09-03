@@ -8,6 +8,8 @@ export interface ServerEnv {
   backgroundsDir: string;
   /** Cookies Secure (HTTPS). A mettre a true en production. */
   cookieSecure: boolean;
+  /** Nombre de proxies devant l'app (0 = direct). Definir >=1 derriere nginx/Caddy/Cloudflare. */
+  trustProxy: number;
   adminUsername: string;
   adminPassword: string;
   sessionDays: number;
@@ -27,6 +29,7 @@ export function loadServerEnv(): ServerEnv {
     outputDir: read("OUTPUT_DIR", "output"),
     backgroundsDir: read("BACKGROUNDS_DIR", "assets/backgrounds"),
     cookieSecure: read("COOKIE_SECURE", "false").toLowerCase() === "true",
+    trustProxy: Number(read("TRUST_PROXY", "0")) || 0,
     adminUsername: read("ADMIN_USERNAME"),
     adminPassword: read("ADMIN_PASSWORD"),
     sessionDays: Number(read("SESSION_DAYS", "30")) || 30,

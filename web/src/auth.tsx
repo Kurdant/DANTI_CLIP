@@ -9,6 +9,7 @@ interface AuthState {
 interface AuthCtx extends AuthState {
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -34,13 +35,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuth({ user: me.user.username, csrf: me.csrfToken });
   }
 
+  async function register(username: string, password: string) {
+    await api("/api/auth/register", { method: "POST", body: { username, password } });
+    const me = await api<{ user: { username: string }; csrfToken: string }>("/api/auth/me");
+    setAuth({ user: me.user.username, csrf: me.csrfToken });
+  }
+
   async function logout() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     setAuth(null);
   }
 
   return (
-    <Ctx.Provider value={{ user: auth?.user ?? "", csrf: auth?.csrf ?? "", loading, login, logout }}>
+    <Ctx.Provider value={{ user: auth?.user ?? "", csrf: auth?.csrf ?? "", loading, login, register, logout }}>
       {children}
     </Ctx.Provider>
   );

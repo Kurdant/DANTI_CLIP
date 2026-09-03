@@ -69,6 +69,15 @@ const loginAttempts = new Map<string, Attempt>();
 const MAX_LOGIN = 5;
 const WINDOW_MS = 15 * 60 * 1000;
 
+// Purge periodique des entrees expirees (evite la croissance memoire illimitee).
+const cleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, a] of loginAttempts) {
+    if (a.resetAt <= now) loginAttempts.delete(ip);
+  }
+}, 60_000);
+cleanupTimer.unref?.();
+
 /** Limiteur de tentatives de connexion par IP (anti brute-force). */
 export const loginRateLimit: RequestHandler = (req, _res, next) => {
   const ip = req.ip ?? "unknown";
