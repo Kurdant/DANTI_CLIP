@@ -3,20 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api } from "../api";
 import type { Project } from "../types";
+import { TopBar } from "../components/TopBar";
 
 function statusLabel(s: string): string {
   const m: Record<string, string> = {
     draft: "Brouillon",
-    ideas: "Idées générées",
-    script: "Script prêt",
-    voice: "Voix générée",
+    ideas: "Idées",
+    script: "Script",
+    voice: "Voix",
     done: "Terminé",
   };
   return m[s] ?? s;
 }
 
+const ORDER: Project["status"][] = ["draft", "ideas", "script", "voice", "done"];
+
 export function DashboardPage() {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const nav = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -61,82 +64,121 @@ export function DashboardPage() {
     setProjects((p) => p.filter((x) => x.id !== id));
   }
 
+  const done = projects.filter((p) => p.status === "done").length;
+  const enCours = projects.filter((p) => p.status !== "done").length;
+
   return (
-    <div className="container">
-      <div className="head">
-        <div>
-          <h1>Mes projets</h1>
-          <div className="sub">Connecté en tant que {user}</div>
+    <div>
+      <TopBar />
+      <main className="container">
+        <div className="head">
+          <div>
+            <span className="kicker" style={{ marginBottom: 10 }}>Dashboard</span>
+            <h1>Mes projets</h1>
+            <div className="sub">Connecté — chaque projet va de l'idée à la vidéo.</div>
+          </div>
+          <button className="btn" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? "Fermer" : "＋ Nouveau projet"}
+          </button>
         </div>
-        <div className="row">
-          <button className="btn" onClick={() => setShowForm((s) => !s)}>+ Nouveau projet</button>
-          <button className="btn secondary" onClick={logout}>Déconnexion</button>
-        </div>
-      </div>
 
-      {showForm && (
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>Créer un projet</h2>
-          {error && <div className="alert">{error}</div>}
-          <div className="field">
-            <label>Mode de création</label>
+        <div className="kpis">
+          <div className="kpi">
+            <div className="kpi-num">{projects.length}</div>
+            <div className="kpi-label">Projets au total</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-num">{enCours}</div>
+            <div className="kpi-label">En cours</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-num">{done}</div>
+            <div className="kpi-label">Vidéos terminées</div>
+          </div>
+        </div>
+
+        {showForm && (
+          <div className="card" style={{ marginBottom: 22 }}>
+            <h2 style={{ marginTop: 0 }}>Créer un projet</h2>
+            {error && <div className="alert">{error}</div>}
+            <div className="field">
+              <label>Mode de création</label>
+              <div className="row">
+                <button
+                  className={"chip" + (mode === "auto" ? " on" : "")}
+                  onClick={() => setMode("auto")}
+                >
+                  L'IA propose 3 sujets
+                </button>
+                <button
+                  className={"chip" + (mode === "manual" ? " on" : "")}
+                  onClick={() => setMode("manual")}
+                >
+                  Je donne mon idée
+                </button>
+              </div>
+            </div>
+            <div className="field">
+              <label>{mode === "auto" ? "Direction / thème (optionnel)" : "Thème / sujet *"}</label>
+              <textarea
+                className="input"
+                rows={mode === "manual" ? 3 : 2}
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder={mode === "auto" ? "Laisse vide pour que l'IA invente 3 sujets, ou donne une direction" : "Décris ton thème de vidéo…"}
+              />
+            </div>
+            <div className="field">
+              <label>{mode === "manual" ? "Titre de la vidéo" : "Titre du projet (optionnel)"}</label>
+              <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
             <div className="row">
-              <button
-                className={"btn sm " + (mode === "auto" ? "" : "secondary")}
-                onClick={() => setMode("auto")}
-              >
-                L'IA propose 3 sujets
+              <button className="btn" disabled={busy || (mode === "manual" && !topic.trim())} onClick={create}>
+                {busy ? "Création…" : "Créer le projet"}
               </button>
-              <button
-                className={"btn sm " + (mode === "manual" ? "" : "secondary")}
-                onClick={() => setMode("manual")}
-              >
-                Je donne mon idée
-              </button>
+              <button className="btn secondary" onClick={() => setShowForm(false)}>Annuler</button>
             </div>
           </div>
-          <div className="field">
-            <label>{mode === "auto" ? "Direction / thème (optionnel)" : "Thème / sujet *"}</label>
-            <textarea
-              className="input"
-              rows={mode === "manual" ? 3 : 2}
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder={mode === "auto" ? "Laisse vide pour que l'IA invente 3 sujets, ou donne une direction" : "Décris ton thème de vidéo…"}
-            />
+        )}
+
+        {projects.length === 0 && !showForm && (
+          <div className="empty">
+            <div className="empty-icon">◈</div>
+            <div style={{ fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Aucun projet pour l'instant</div>
+            <div style={{ marginBottom: 18, fontSize: 14 }}>Crée-en un et laisse l'IA te proposer 3 sujets.</div>
+            <button className="btn" onClick={() => setShowForm(true)}>＋ Créer mon premier projet</button>
           </div>
-          <div className="field">
-            <label>{mode === "manual" ? "Titre de la vidéo" : "Titre du projet (optionnel)"}</label>
-            <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div className="row">
-            <button className="btn" disabled={busy || (mode === "manual" && !topic.trim())} onClick={create}>
-              {busy ? "Création…" : "Créer le projet"}
-            </button>
-            <button className="btn secondary" onClick={() => setShowForm(false)}>Annuler</button>
-          </div>
+        )}
+
+        <div className="grid">
+          {projects.map((p) => {
+            const idx = ORDER.indexOf(p.status);
+            return (
+              <div key={p.id} className="card clickable project-card" onClick={() => nav(`/project/${p.id}`)}>
+                <div className="project-cover" />
+                <div className="project-body">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <h3 style={{ margin: 0, fontSize: 17 }}>{p.title}</h3>
+                    <button className="btn danger sm" style={{ padding: "4px 9px" }} onClick={(e) => del(p.id, e)} title="Supprimer">✕</button>
+                  </div>
+                  <p className="sub" style={{ margin: "8px 0 0", fontSize: 13, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {p.topic}
+                  </p>
+                  <div className="row" style={{ marginTop: 12 }}>
+                    <span className={"badge " + p.mode}>{p.mode === "auto" ? "IA" : "Manuel"}</span>
+                    <span className={"badge " + p.status}>{statusLabel(p.status)}</span>
+                  </div>
+                  <div className="progress-track">
+                    {ORDER.map((s, i) => (
+                      <i key={s} className={i <= idx ? "on" : ""} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
-
-      {projects.length === 0 && !showForm && (
-        <div className="empty">Aucun projet pour l'instant. Crée-en un pour commencer.</div>
-      )}
-
-      <div className="grid">
-        {projects.map((p) => (
-          <div key={p.id} className="card clickable" onClick={() => nav(`/project/${p.id}`)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <h3 style={{ margin: 0, fontSize: 16 }}>{p.title}</h3>
-              <button className="btn danger sm" onClick={(e) => del(p.id, e)}>✕</button>
-            </div>
-            <p className="sub" style={{ margin: "8px 0" }}>{p.topic}</p>
-            <div className="row">
-              <span className={"badge " + p.mode}>{p.mode === "auto" ? "IA" : "Manuel"}</span>
-              <span className={"badge " + p.status}>{statusLabel(p.status)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      </main>
     </div>
   );
 }

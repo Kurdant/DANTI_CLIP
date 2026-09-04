@@ -62,8 +62,14 @@ export interface Project {
 
 export interface Background {
   fileName: string;
+  source: "default" | "user";
   downloadUrl: string;
   thumbUrl: string;
+}
+
+export interface BackgroundList {
+  backgrounds: Background[];
+  maxUploadBytes: number;
 }
 
 export interface VoiceOption {

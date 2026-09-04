@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { Brand } from "../components/TopBar";
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -25,10 +26,13 @@ export function LoginPage() {
   }
 
   return (
-    <div className="center" style={{ minHeight: "100vh" }}>
-      <form onSubmit={submit} className="card" style={{ width: 360, padding: 26 }}>
-        <h1 style={{ marginTop: 0, fontSize: 20 }}>Connexion</h1>
-        <p className="sub">DANTI CLIPER — interface sécurisée</p>
+    <div className="auth-page">
+      <form onSubmit={submit} className="auth-card">
+        <div className="auth-head">
+          <Brand />
+          <h1>Connexion</h1>
+          <p className="sub" style={{ margin: "0 0 22px" }}>Retrouve tes projets de shorts.</p>
+        </div>
         {error && <div className="alert">{error}</div>}
         <div className="field">
           <label>Nom d'utilisateur</label>
@@ -41,8 +45,11 @@ export function LoginPage() {
         <button className="btn block" disabled={busy || !username || !password}>
           {busy ? "Connexion…" : "Se connecter"}
         </button>
-        <p className="sub" style={{ marginTop: 14, textAlign: "center" }}>
+        <p className="sub" style={{ marginTop: 18, textAlign: "center" }}>
           Pas de compte ? <Link to="/register">Créer un compte</Link>
+        </p>
+        <p className="sub" style={{ marginTop: 8, textAlign: "center" }}>
+          <Link to="/">← Retour à l'accueil</Link>
         </p>
       </form>
     </div>

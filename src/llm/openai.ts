@@ -27,6 +27,9 @@ export class OpenAiCompatibleProvider implements LlmProvider {
         model: this.model,
         messages,
         temperature: 0.9,
+        // Force une sortie JSON (supported par Groq / gpt-oss) pour garantir
+        // un parse fiable du script / des idees malgre le modele reasoning.
+        response_format: { type: "json_object" },
       }),
     });
 

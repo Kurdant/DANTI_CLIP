@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "node:path";
 
 export interface ServerEnv {
   port: number;
@@ -6,6 +7,8 @@ export interface ServerEnv {
   dbPath: string;
   outputDir: string;
   backgroundsDir: string;
+  /** Repertoire des fonds video uploadees par les utilisateurs (par sous-dossier userId). */
+  userBackgroundsDir: string;
   /** Cookies Secure (HTTPS). A mettre a true en production. */
   cookieSecure: boolean;
   /** Nombre de proxies devant l'app (0 = direct). Definir >=1 derriere nginx/Caddy/Cloudflare. */
@@ -28,6 +31,7 @@ export function loadServerEnv(): ServerEnv {
     dbPath: read("DB_PATH", `${dataDir}/danticliper.db`),
     outputDir: read("OUTPUT_DIR", "output"),
     backgroundsDir: read("BACKGROUNDS_DIR", "assets/backgrounds"),
+    userBackgroundsDir: read("USER_BACKGROUNDS_DIR", path.join(dataDir, "uploads", "backgrounds")),
     cookieSecure: read("COOKIE_SECURE", "false").toLowerCase() === "true",
     trustProxy: Number(read("TRUST_PROXY", "0")) || 0,
     adminUsername: read("ADMIN_USERNAME"),

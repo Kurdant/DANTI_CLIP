@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { Brand } from "../components/TopBar";
 
 export function RegisterPage() {
   const { register } = useAuth();
@@ -30,10 +31,15 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="center" style={{ minHeight: "100vh" }}>
-      <form onSubmit={submit} className="card" style={{ width: 380, padding: 26 }}>
-        <h1 style={{ marginTop: 0, fontSize: 20 }}>Créer un compte</h1>
-        <p className="sub">Rejoins DANTI CLIPER — chaque compte a ses propres projets.</p>
+    <div className="auth-page">
+      <form onSubmit={submit} className="auth-card">
+        <div className="auth-head">
+          <Brand />
+          <h1>Créer un compte</h1>
+          <p className="sub" style={{ margin: "0 0 22px" }}>
+            Chaque compte a ses propres projets et ses fonds vidéo.
+          </p>
+        </div>
         {error && <div className="alert">{error}</div>}
         <div className="field">
           <label>Nom d'utilisateur (3-30, lettres/chiffres/_.-)</label>
@@ -50,8 +56,11 @@ export function RegisterPage() {
         <button className="btn block" disabled={busy || !username || !password || !confirm}>
           {busy ? "Création…" : "Créer mon compte"}
         </button>
-        <p className="sub" style={{ marginTop: 14, textAlign: "center" }}>
+        <p className="sub" style={{ marginTop: 18, textAlign: "center" }}>
           Déjà un compte ? <Link to="/login">Se connecter</Link>
+        </p>
+        <p className="sub" style={{ marginTop: 8, textAlign: "center" }}>
+          <Link to="/">← Retour à l'accueil</Link>
         </p>
       </form>
     </div>

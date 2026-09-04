@@ -26,7 +26,8 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:"],
       mediaSrc: ["'self'", "blob:"],
       connectSrc: ["'self'"],
@@ -47,7 +48,7 @@ app.use(attachAuth(env));
 // Tout /api exige auth + CSRF sur les mutations, SAUF :
 //   - /api/health
 //   - /api/auth/login          (public, rate-limited)
-//   - GET /api/backgrounds*     (ressources statiques non sensibles)
+//   - /api/auth/register
 app.use((req, res, next) => {
   const p = req.path;
   // Le portail ne protege que /api ; le frontend (statique + SPA) reste serviable.
@@ -55,8 +56,7 @@ app.use((req, res, next) => {
   const isPublic =
     p === "/api/health" ||
     p === "/api/auth/login" ||
-    p === "/api/auth/register" ||
-    (req.method === "GET" && p.startsWith("/api/backgrounds"));
+    p === "/api/auth/register";
   if (isPublic) return next();
   if (!req.auth) return next(new ApiError(401, "Authentification requise"));
   if (req.method !== "GET" && req.method !== "HEAD") {
@@ -67,6 +67,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Sante : declaree AVANT les routeurs car l'un d'eux (videos) applique
+// un requireAuth global qui bloquerait ce endpoint public.
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
 // API
 app.use("/api", authRouter(env));
 app.use("/api", backgroundsRouter(env));
@@ -74,8 +78,6 @@ app.use("/api", workflowRouter(env));
 app.use("/api", projectsRouter(env));
 app.use("/api", audioRouter(env));
 app.use("/api", videosRouter(env));
-
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // Statique React + fallback SPA
 const webDist = path.resolve(__dirname, "../../web/dist");

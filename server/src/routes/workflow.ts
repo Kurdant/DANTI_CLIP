@@ -8,7 +8,7 @@ import type { ServerEnv } from "../lib/env.js";
 import { dbQuery, asyncHandler, ApiError, requireAuth, csrfProtect } from "../auth/middleware.js";
 import { selectIdeaSchema, scriptActionSchema, voiceSchema } from "../validate/schemas.js";
 import { getProjectRow, getIdeas, getScripts, getVoices, getVideos } from "../lib/serialize.js";
-import { resolveWithin } from "../lib/fspath.js";
+import { resolveBackgroundAbs } from "../lib/backgrounds.js";
 import { loadConfig } from "../../../src/config.js";
 import { createLlm, extractJson } from "../../../src/llm/index.js";
 import { messagesIdees, messagesScript, type IdeasResult, type ScriptResult } from "../../../src/prompts.js";
@@ -75,11 +75,10 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
       try { wb = JSON.parse(fs.readFileSync(path.join(dir, String(voiceRow.wb_file)), "utf8")); } catch { wb = null; }
     }
 
-    // Fond selectionne (sinon fond uni).
+    // Fond selectionne (sinon fond uni). Utilisateur d'abord, puis fonds par defaut.
     let bgVideoAbs: string | null = null;
     if (project.selected_background) {
-      const bgPath = resolveWithin(env.backgroundsDir, project.selected_background);
-      if (bgPath && fsExistsSync(bgPath)) bgVideoAbs = bgPath;
+      bgVideoAbs = resolveBackgroundAbs(env, project.user_id, project.selected_background);
     }
 
     // Regenerer les sous-titres selon le style choisi.
