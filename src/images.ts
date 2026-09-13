@@ -23,8 +23,10 @@ import { extractJson } from "./llm/openai.js";
 const PEXELS_SEARCH = "https://api.pexels.com/v1/search";
 const PEXELS_VIDEOS = "https://api.pexels.com/videos/search";
 
-/** Nombre max d'images pour ne pas exploser le rendu (une par phrase/clause). */
-const MAX_IMAGES = 20;
+/** Nombre max d'images par video : une par phrase / idee cle (pas par clause). */
+const MAX_SEGMENTS = 7;
+/** Seuil de pertinence minimal d'une photo (0..1). En dessous, on ne l'utilise pas. */
+const MIN_RELEVANCE = 0.5;
 
 const NS_PER_SEC = 10_000_000;
 
@@ -41,6 +43,19 @@ const STOPWORDS = new Set([
   "seul", "seule", "suffit", "suffisent", "laisse", "laissent", "soit", "ainsi",
   "puis", "ensuite", "quand", "lorsque", "alors", "donc", "car", "comme", "vers",
   "trop", "beaucoup", "moins", "peu", "près", "environ", "situé", "située",
+  // Stopwords anglais (le contenu genere est en anglais).
+  "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "is",
+  "are", "was", "were", "be", "been", "being", "it", "its", "this", "that",
+  "these", "those", "you", "your", "we", "our", "they", "their", "he", "she",
+  "his", "her", "as", "at", "by", "from", "into", "than", "then", "so", "but",
+  "if", "not", "no", "do", "does", "did", "has", "have", "had", "will", "would",
+  "can", "could", "should", "may", "might", "must", "about", "more", "most",
+  "much", "many", "some", "any", "all", "each", "every", "other", "such",
+  "only", "own", "same", "too", "very", "just", "also", "up", "out", "down",
+  "over", "under", "again", "once", "here", "there", "when", "where", "why",
+  "how", "what", "which", "who", "whom", "while", "because", "before", "after",
+  "during", "above", "below", "between", "through", "against", "without",
+  "within", "them", "us", "yourself", "itself",
 ]);
 
 /** Normalise : accent -> ascii, unifie espaces (dont insécable). */
@@ -87,29 +102,37 @@ function isCta(text: string): boolean {
 }
 
 /**
- * Decoupe la narration en segments pour obtenir UNE IMAGE PAR PHRASE / CLAUSE.
- * On scinde chaque phrase sur les virgules et conjonctions de liaison quand elle
- * est assez longue : plus de segments => plus d'images, chacune plus precise.
+ * Decoupe la narration en SEGMENTS : un par phrase, ou par groupe de phrases
+ * quand il y en a trop. Une image par phrase / idee cle (jamais par clause) :
+ * moins d'images, chacune reste plus longtemps et est mieux choisie.
  */
-export function segmentNarration(text: string): string[] {
-  const sents = text.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter(Boolean);
-  const chunks: string[] = [];
-  for (const s of sents) {
-    const words = s.split(/\s+/).filter(Boolean).length;
-    // Scinde en clauses si la phrase est assez longue (virgule / liaison "et/mais/puis/qui").
-    // On ecarte les fragments trop courts (<3 mots) pour ne pas creer d'images inutiles.
-    if (words > 8) {
-      const clauses = s
-        .split(/\s*(?:,|;| et |, | mais | puis | qui | par | afin d')\s*/i)
-        .map((c) => c.trim())
-        .filter((c) => c.split(/\s+/).filter(Boolean).length >= 3);
-      if (clauses.length > 1) chunks.push(...clauses);
-      else chunks.push(s);
-    } else {
-      chunks.push(s);
+export function segmentNarration(text: string, maxSegments = MAX_SEGMENTS): string[] {
+  const sents = text
+    .split(/(?<=[.!?…])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.split(/\s+/).filter(Boolean).length >= 2);
+  if (sents.length === 0) return [];
+  if (sents.length <= maxSegments) return sents;
+
+  // Trop de phrases : fusionne les phrases consecutives en groupes equilibres.
+  const counts = sents.map((s) => s.split(/\s+/).filter(Boolean).length);
+  const total = counts.reduce((a, b) => a + b, 0) || 1;
+  const target = total / maxSegments;
+  const out: string[] = [];
+  let buf: string[] = [];
+  let bufWords = 0;
+  for (let i = 0; i < sents.length; i++) {
+    buf.push(sents[i]);
+    bufWords += counts[i];
+    const groupsLeft = maxSegments - out.length;
+    if (bufWords >= target && groupsLeft > 1) {
+      out.push(buf.join(" "));
+      buf = [];
+      bufWords = 0;
     }
   }
-  return chunks;
+  if (buf.length) out.push(buf.join(" "));
+  return out;
 }
 
 /**
@@ -207,7 +230,7 @@ interface PexelsVideo {
  * mp4 le plus adapte (portrait, hauteur 1280-1920 de preference) + sa duree.
  */
 async function searchBestVideo(apiKey: string, query: string): Promise<{ url: string; duration: number } | null> {
-  const url = `${PEXELS_VIDEOS}?query=${encodeURIComponent(query)}&orientation=portrait&per_page=5&locale=fr-FR`;
+  const url = `${PEXELS_VIDEOS}?query=${encodeURIComponent(query)}&orientation=portrait&per_page=5&locale=en-US`;
   const res = await fetch(url, { headers: { Authorization: apiKey } });
   if (!res.ok) return null;
   const data = (await res.json()) as { videos?: PexelsVideo[] };
@@ -228,27 +251,50 @@ interface PexelsPhoto {
   alt?: string | null;
 }
 
-/** Cherche la meilleure image portrait pour une requete, retourne l'URL la plus fiable. */
-async function searchBestPhoto(apiKey: string, query: string): Promise<string | null> {
-  const url = `${PEXELS_SEARCH}?query=${encodeURIComponent(query)}&orientation=portrait&per_page=3&locale=fr-FR`;
+/** Score de pertinence (0..1) d'une photo : couverture des mots-clefs par l'alt. */
+function relevanceScore(alt: string, keys: string[]): number {
+  if (keys.length === 0) return 0;
+  const a = norm(alt);
+  const altWords = new Set(a.split(/[^a-z0-9]+/).filter(Boolean));
+  let hits = 0;
+  let primaryHit = false;
+  keys.forEach((k, i) => {
+    if (altWords.has(k) || a.includes(k)) {
+      hits++;
+      if (i === 0) primaryHit = true;
+    }
+  });
+  if (hits === 0) return 0;
+  const coverage = hits / keys.length;
+  // Bonus si le sujet principal (1er mot-cle) est present dans l'alt.
+  return Math.min(1, coverage + (primaryHit ? 0.2 : 0));
+}
+
+/**
+ * Cherche la meilleure photo portrait pour une requete et ne la retourne que si
+ * elle est ASSEZ PERTINENTE. Sinon null : pas d'image plutot qu'une image hors-sujet.
+ * On note jusqu'a 15 candidates sur la correspondance de leur alt avec la requete.
+ */
+async function searchBestPhoto(apiKey: string, query: string): Promise<{ url: string; score: number } | null> {
+  const url = `${PEXELS_SEARCH}?query=${encodeURIComponent(query)}&orientation=portrait&per_page=15&locale=en-US`;
   const res = await fetch(url, { headers: { Authorization: apiKey } });
   if (!res.ok) return null;
   const data = (await res.json()) as { photos?: PexelsPhoto[] };
   const photos = data.photos ?? [];
   if (photos.length === 0) return null;
-  // On garde la photo dont l'alt colle le plus aux mots-clefs de la requete.
-  const keys = norm(query).split(/\s+/).filter(Boolean);
-  let best = photos[0];
-  let bestScore = -1;
+
+  const keys = significantWords(query);
+  let best: { url: string; score: number } | null = null;
   for (const p of photos) {
-    const alt = norm(p.alt ?? "");
-    const score = keys.reduce((acc, k) => acc + (alt.includes(k) ? 1 : 0), 0);
-    if (score > bestScore) {
-      bestScore = score;
-      best = p;
-    }
+    const src = p.src?.portrait || p.src?.large2x;
+    if (!src) continue;
+    const alt = (p.alt ?? "").trim();
+    // Sans alt : impossible de verifier => score neutre, sous le seuil (rejete).
+    const score = alt ? relevanceScore(alt, keys) : 0.35;
+    if (!best || score > best.score) best = { url: src, score };
   }
-  return best.src?.portrait || best.src?.large2x || null;
+  if (!best || best.score < MIN_RELEVANCE) return null;
+  return best;
 }
 
 /**
@@ -270,7 +316,7 @@ export async function fetchPartImages(opts: {
 }): Promise<PartImage[]> {
   const { apiKey, script, idea, durationSec, renderDir, wordBoundaries, llm, allowVideos = false } = opts;
   const text = script.texte_continu ?? "";
-  const chunks = segmentNarration(text).slice(0, MAX_IMAGES);
+  const chunks = segmentNarration(text);
   if (chunks.length === 0) return [];
 
   await mkdir(renderDir, { recursive: true });
@@ -316,20 +362,6 @@ export async function fetchPartImages(opts: {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  // Filet de securite : une image "sujet" telechargee une fois en amont, reutilisee
-  // si la recherche specifique d'un segment ne donne rien (jamais de segment vide).
-  let fallbackFile: string | null = null;
-  try {
-    const fallbackSrc = await searchBestPhoto(apiKey, subjectQ);
-    if (fallbackSrc) {
-      fallbackFile = "subject_0.jpg";
-      await downloadImage(fallbackSrc, path.join(renderDir, fallbackFile));
-      await sleep(120);
-    }
-  } catch {
-    fallbackFile = null;
-  }
-
   const images: PartImage[] = [];
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
@@ -337,14 +369,29 @@ export async function fetchPartImages(opts: {
     if (!t) continue;
 
     // Requete : IA si dispo, sinon mots-clefs ; CTA / peu de mots => sujet.
-    let q = queries[i] || segmentQuery(chunk);
+    let q = (queries[i] || "").trim() || segmentQuery(chunk);
     if (isCta(chunk) || significantWords(chunk).length < 2) q = subjectQ;
 
     let file: string | null = null;
     let kind: "image" | "video" = "image";
 
-    // 1) Clip video libre (si active), 2) photo specifique, 3) filet sujet.
-    if (allowVideos) {
+    // 1) PHOTO d'abord : sa pertinence est VERIFIABLE via l'alt. On ne garde que
+    //    les photos qui passent le seuil, sinon on prefere ne rien mettre.
+    let src: { url: string; score: number } | null = null;
+    try {
+      src = await searchBestPhoto(apiKey, q || subjectQ);
+    } catch {
+      src = null;
+    }
+    await sleep(120);
+    if (src) {
+      file = `part_${i}.jpg`;
+      await downloadImage(src.url, path.join(renderDir, file));
+    }
+
+    // 2) Clip video libre, seulement si active et qu'aucune photo pertinente n'a
+    //    ete trouvee (un clip ne peut pas etre verifie par texte).
+    if (!file && allowVideos) {
       try {
         const v = await searchBestVideo(apiKey, q || subjectQ);
         if (v) {
@@ -359,22 +406,12 @@ export async function fetchPartImages(opts: {
       await sleep(120);
     }
 
+    // 3) Rien de pertinent : on prolonge l'image precedente (jamais d'image hors-sujet).
     if (!file) {
-      let src: string | null = null;
-      try {
-        src = await searchBestPhoto(apiKey, q || subjectQ);
-      } catch {
-        src = null;
-      }
-      await sleep(120);
-      if (src) {
-        file = `part_${i}.jpg`;
-        await downloadImage(src, path.join(renderDir, file));
-      } else if (fallbackFile) {
-        file = fallbackFile;
-      }
+      const prev = images[images.length - 1];
+      if (prev) prev.end = Math.max(prev.end, t.end);
+      continue;
     }
-    if (!file) continue;
     images.push({ file, start: t.start, end: t.end, kind });
   }
 

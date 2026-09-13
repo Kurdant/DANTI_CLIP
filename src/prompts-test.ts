@@ -20,21 +20,14 @@ TONE - HYPE, ENERGETIC, GOOFY :
   lively and a little absurd. Avoid corporate or dry language.
 - The hook must be SHOCKING and hype, then the proof keeps the energy up.
 
-SLANG - MANDATORY, NATURAL, EMBEDDED IN THE SENTENCE :
-- You MUST use these EXACT slang words in the narration : W, cooked, no cap,
-  maxxing, rizzler, mogging, mogged, mewing, rizz, goat, goated, NPC, main
-  character, peak, mid, aura.
-- Use 5-6 of them per video (different ones), spread naturally across the WHOLE
-  script (hook, body, proof, ending). They must FIT the sentence and make sense -
-  never forced, never random, like a hype creator would talk.
-- The hook sentence MUST contain at least ONE slang word EMBEDDED INSIDE the
-  sentence - NOT as a prefix like "No cap: ...". The hook stays a punchy sentence
-  where the slang fits naturally, never glued in front with a colon. Examples :
-  "Plastic takes 700 years to degrade - no cap."
-  "An octopus has three hearts, and that's peak aura."
-  "Your brain burns 20% of your energy. Massive W."
-  "Ants lift 100x their weight, and that's goated."
-  "This fact mogged the scientists."
+SLANG - OPTIONAL, AT MOST ONE, NEVER IN THE HOOK :
+- The hook MUST stay 100% clear and instantly understandable : NO slang in the
+  hook, ever. The first sentence is sacred - it must be understood by everyone.
+- In the BODY ONLY, you may use AT MOST ONE slang word, chosen from this list :
+  W, cooked, no cap, maxxing, rizzler, mogging, mogged, mewing, rizz, goat,
+  goated, NPC, main character, peak, mid, aura.
+- Never force it. If it does not fit naturally, use NONE. Clarity always beats
+  slang. When in doubt, drop the slang word entirely.
 - Keep the WHOLE hook to MAX 12 words.
 
 PACKAGING - TITLE, DESCRIPTION, HASHTAGS :
@@ -170,8 +163,8 @@ Progression :
   ending, NEVER after - the last thing heard must be the ending.
 texte_continu MUST start with the exact hook sentence, then flow, and END with the
 ending. Total target duration : 25-35s, budget MAX ~140 words. Keep the HYPE tone
-throughout : energetic, punchy, goofy, and use 5-6 of the MANDATORY slang words
-naturally (at least one EMBEDDED inside the hook sentence, not as a prefix).`;
+throughout : energetic, punchy, goofy. Slang is OPTIONAL : AT MOST ONE slang word
+in the BODY, and NEVER in the hook - the hook must stay instantly clear.`;
 
   const user = `Idea to develop : "${idea}"
 Language : ${language}

@@ -201,19 +201,25 @@ Reply with this exact JSON schema :
 // 3) Pexels image search queries per segment
 // ------------------------------------------------------------
 const IMAGE_RULES = `
-You are an expert who translates a narration sentence into a precise and VISUAL
-image search query for Pexels (photo stock). You write in English.
+You turn a narration sentence into ONE precise Pexels (photo stock) search query.
+You write in English. The goal is a PHOTO THAT MATCHES the sentence.
+The query MUST name a CONCRETE, PHOTOGRAPHABLE subject : a real object, animal,
+plant, place, body part, organ, material, food or scene a camera could capture.
 Rules :
-- ONE short query per segment (2 to 6 words), concrete, showing the real
-  object/animal/scene the sentence talks about. Ex : "horned viking helmet",
-  "flamingo", "blood vessels".
-- Focus on the video SUBJECT : the query must stay in the video theme.
-- IGNORE negations : "never existed" must NOT give "no helmet", but the photo
-  of the object being talked about ("horned viking helmet").
-- Never combine two different subjects in the same query.
-- No filler words, no isolated numbers, no "a/an/the".
-- If the sentence is a call to action or contains nothing visual, reply with a
-  query about the video subject (representative background image).
+- 2 to 5 words. The concrete noun(s) FIRST. Ex : "flamingo", "human brain",
+  "venus planet", "shrimp", "blood vessels", "dna helix", "viking helmet".
+- FORBIDDEN : abstract concepts (pigment, rotation, energy, process, time,
+  memory), verbs, bare adjectives, numbers, and generic filler ("concept",
+  "science", "idea", "thing", "background", "nature" alone, "abstract").
+- If the sentence is abstract, name the MOST CONCRETE real thing it is about
+  (the object, animal, place, organ or material behind the idea).
+- Stay in the video theme (use the main subject as context when useful).
+- IGNORE negations : "never existed" => the photo of the thing talked about
+  ("viking helmet"), never "no helmet".
+- ONE subject per query. Never two different subjects.
+- No filler words, no "a/an/the", no isolated numbers.
+- If the sentence is a call to action or has nothing visual, return the main
+  video subject as the query.
 `;
 
 export function messagesImageQueries(opts: {
