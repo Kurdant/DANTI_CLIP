@@ -9,22 +9,27 @@ interface Props {
   onSelect: (fileName: string | null) => void;
   /** Style sur fond dégradé (texte + boutons clairs). */
   accent?: boolean;
-  /** Taille maximale d'upload en octets. */
+  /** Taille maximale d'un fichier uploadé (octets). */
   maxBytes: number;
+  /** Espace déjà consommé par les fonds de l'utilisateur (octets). */
+  usedBytes: number;
+  /** Quota total de stockage des fonds (octets). */
+  quotaBytes: number;
   /** Appelé après un upload / une suppression pour rafraîchir la liste. */
   onChanged?: () => void;
 }
 
 function fmtBytes(n: number): string {
-  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " Mo";
-  if (n >= 1024) return (n / 1024).toFixed(0) + " Ko";
-  return n + " o";
+  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+  if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+  return n + " B";
 }
 
-export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxBytes, onChanged }: Props) {
+export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxBytes, usedBytes, quotaBytes, onChanged }: Props) {
   const { csrf } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const limit = maxBytes > 0 ? maxBytes : 200 * 1024 * 1024;
+  const quota = quotaBytes > 0 ? quotaBytes : 200 * 1024 * 1024;
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [sel, setSel] = useState<{ name: string; size: number } | null>(null);
@@ -32,8 +37,11 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
 
   const defaults = backgrounds.filter((b) => b.source === "default");
   const own = backgrounds.filter((b) => b.source === "user");
-  const curSize = sel ? sel.size : 0;
-  const overLimit = !!sel && sel.size > limit;
+  const selSize = sel ? sel.size : 0;
+  const total = usedBytes + selSize;
+  const overFileLimit = !!sel && sel.size > limit;
+  const overQuota = total > quota;
+  const overLimit = overFileLimit || overQuota;
 
   const subStyle: React.CSSProperties = {
     fontSize: 12,
@@ -46,6 +54,10 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
     setError("");
     setSel({ name: f.name, size: f.size });
     setProgress(0);
+    if (!/\.mp4$/i.test(f.name)) {
+      setError("Only MP4 format is accepted (file: " + f.name + ")");
+      return;
+    }
     if (f.size > limit) return;
 
     const xhr = new XMLHttpRequest();
@@ -60,7 +72,7 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
         setProgress(null);
         onChanged?.();
       } else {
-        let msg = "Erreur pendant l'upload";
+        let msg = "Error during upload";
         try {
           const j = JSON.parse(xhr.responseText) as { error?: string };
           if (j.error) msg = j.error;
@@ -73,7 +85,7 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
       setBusy("");
     };
     xhr.onerror = () => {
-      setError("Erreur réseau pendant l'upload");
+      setError("Network error during upload");
       setProgress(null);
       setBusy("");
     };
@@ -84,7 +96,7 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
   }
 
   async function remove(b: Background) {
-    if (!confirm(`Supprimer le fond « ${b.fileName} » ?`)) return;
+    if (!confirm(`Delete background "${b.fileName}"?`)) return;
     setBusy("del-" + b.fileName);
     setError("");
     try {
@@ -92,7 +104,7 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
       if (selected === b.fileName) onSelect(null);
       onChanged?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : "Error");
     } finally {
       setBusy("");
     }
@@ -132,7 +144,7 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
               remove(b);
             }}
             style={{ position: "absolute", top: 4, right: 4, padding: "2px 7px", fontSize: 12 }}
-            title="Supprimer mon fond"
+            title="Delete my background"
           >
             ✕
           </button>
@@ -147,15 +159,15 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
     <div>
       <div className="row between" style={{ marginBottom: 8 }}>
         <label style={{ fontSize: 13, color: accent ? "rgba(255,255,255,.9)" : undefined }}>
-          {selected ? "" : "Fond vidéo (fond uni si aucun)"}
+          {selected ? "" : "Video background (solid color if none)"}
         </label>
         <button className="btn secondary sm" disabled={!!busy} onClick={() => fileRef.current?.click()}>
-          {busy === "upload" ? "Upload…" : "＋ Uploader un fond"}
+          {busy === "upload" ? "Uploading…" : "＋ Upload a background"}
         </button>
         <input
           ref={fileRef}
           type="file"
-          accept="video/*,.mp4,.webm,.mov,.mkv,.avi"
+          accept=".mp4,video/mp4"
           hidden
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -165,31 +177,35 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
         />
       </div>
 
-      {/* Barre de limite : taille utilisee / maximum + reste (toujours visible) */}
+      {/* Barre de place restante : espace utilise (fonds existants + fichier choisi) vs quota */}
       <div style={{ marginBottom: 8 }}>
         <div className="row between" style={{ fontSize: 12, marginBottom: 3 }}>
           <span style={{ color: accent ? "rgba(255,255,255,.9)" : "var(--muted)", wordBreak: "break-all" }}>
-            {sel ? sel.name : "Aucun fichier sélectionné"}
+            {sel ? sel.name : "No file selected"}
           </span>
-          <span style={{ color: accent ? "rgba(255,255,255,.9)" : "var(--muted)", fontWeight: 600 }}>
-            {fmtBytes(curSize)} / {fmtBytes(limit)}
-            {overLimit ? " — dépasse la limite" : ` — reste ${fmtBytes(Math.max(0, limit - curSize))}`}
+          <span style={{ color: accent ? "rgba(255,255,255,.95)" : "var(--muted)", fontWeight: 600 }}>
+            {fmtBytes(total)} / {fmtBytes(quota)}
+            {overLimit
+              ? overFileLimit
+                ? " — exceeds the max size per file"
+                : " — exceeds the storage quota"
+              : ` — ${fmtBytes(Math.max(0, quota - total))} left`}
           </span>
         </div>
         <div style={{ height: 8, borderRadius: 999, background: accent ? "rgba(255,255,255,.35)" : "var(--panel-2)", overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
-              width: `${Math.min(100, (curSize / limit) * 100)}%`,
+              width: `${Math.min(100, (total / quota) * 100)}%`,
               background: barColor,
               transition: "width .2s",
             }}
           />
         </div>
-        {progress !== null && sel && !overLimit && curSize > 0 && (
+        {progress !== null && sel && !overLimit && selSize > 0 && (
           <div style={{ marginTop: 5 }}>
             <div className="row between" style={{ fontSize: 12, color: accent ? "rgba(255,255,255,.9)" : "var(--muted)" }}>
-              <span>Envoi {busy === "upload" ? "…" : ""}</span>
+              <span>Uploading {busy === "upload" ? "…" : ""}</span>
               <span>{Math.round(progress * 100)}%</span>
             </div>
             <div style={{ height: 5, borderRadius: 999, background: accent ? "rgba(255,255,255,.35)" : "var(--panel-2)", overflow: "hidden" }}>
@@ -203,13 +219,13 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
 
       {backgrounds.length === 0 ? (
         <div style={{ fontSize: 13, color: accent ? "rgba(255,255,255,.85)" : "var(--muted)" }}>
-          Aucune vidéo de fond. Uploade la tienne ci-dessus (ou téléverse des fonds par défaut côté serveur).
+          No background videos. Upload your own above (or upload default backgrounds server-side).
         </div>
       ) : (
         <>
           {own.length > 0 && (
             <>
-              <div style={subStyle}>Mes fonds</div>
+              <div style={subStyle}>My backgrounds</div>
               <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))" }}>
                 {own.map(gridItem)}
               </div>
@@ -217,7 +233,7 @@ export function BackgroundPicker({ backgrounds, selected, onSelect, accent, maxB
           )}
           {defaults.length > 0 && (
             <>
-              <div style={subStyle}>Fonds par défaut</div>
+              <div style={subStyle}>Default backgrounds</div>
               <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))" }}>
                 {defaults.map(gridItem)}
               </div>

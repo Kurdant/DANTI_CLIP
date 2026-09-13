@@ -42,6 +42,25 @@ export function scanUserBackgrounds(env: ServerEnv, userId: number): string[] {
   return scanDir(userBgDir(env, userId));
 }
 
+/** Espace (octets) deja consomme par les fonds video d'un utilisateur. */
+export function userBackgroundsUsedBytes(env: ServerEnv, userId: number): number {
+  const dir = userBgDir(env, userId);
+  try {
+    if (!fs.existsSync(dir)) return 0;
+    return fs.readdirSync(dir).reduce((sum, f) => {
+      if (!isVideo(f)) return sum;
+      try {
+        const st = fs.statSync(path.join(dir, f));
+        return st.isFile() ? sum + st.size : sum;
+      } catch {
+        return sum;
+      }
+    }, 0);
+  } catch {
+    return 0;
+  }
+}
+
 export function scanDefaultBackgrounds(env: ServerEnv): string[] {
   return scanDir(env.backgroundsDir);
 }

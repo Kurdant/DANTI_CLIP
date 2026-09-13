@@ -15,10 +15,10 @@ interface Db {
  */
 export async function seedAdmin(env: ServerEnv, force = false): Promise<string> {
   if (!env.adminUsername || !env.adminPassword) {
-    return "Config admin absente : renseigne ADMIN_USERNAME et ADMIN_PASSWORD dans .env";
+    return "Admin config missing: set ADMIN_USERNAME and ADMIN_PASSWORD in .env";
   }
   if (env.adminPassword.length < 8) {
-    return "ADMIN_PASSWORD trop court (minimum 8 caracteres)";
+    return "ADMIN_PASSWORD too short (minimum 8 characters)";
   }
 
   const db = getDb(env) as unknown as Db;
@@ -28,11 +28,11 @@ export async function seedAdmin(env: ServerEnv, force = false): Promise<string> 
   const hash = await hashPassword(env.adminPassword);
 
   if (existing && !force) {
-    return "Admin deja present : ok (mode non force, mot de passe inchange)";
+    return "Admin already exists: ok (non-force mode, password unchanged)";
   }
   db.prepare(
     "INSERT INTO users (username, password_hash) VALUES (?, ?) " +
       "ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash",
   ).run(env.adminUsername, hash);
-  return "Admin cree/mis a jour : " + env.adminUsername;
+  return "Admin created/updated: " + env.adminUsername;
 }

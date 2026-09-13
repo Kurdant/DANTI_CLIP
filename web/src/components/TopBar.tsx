@@ -1,40 +1,28 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
 
-export function Brand({ small }: { small?: boolean }) {
+export function Brand({ small, to = "/" }: { small?: boolean; to?: string }) {
   return (
-    <Link to="/" className="brand" style={small ? { gap: 8 } : undefined}>
+    <Link to={to} className="brand" style={small ? { gap: 8 } : undefined}>
       <span className="brand-mark">▶</span>
-      <span className="brand-name">
-        DANTI <em>CLIPER</em>
-      </span>
+      <span className="brand-name">danticlip</span>
     </Link>
   );
 }
 
 export function TopBar() {
-  const { user, logout } = useAuth();
-  const nav = useNavigate();
-
+  const { user } = useAuth();
   return (
     <header className="appbar">
       <div className="container">
-        <Brand />
-        <nav className="nav-links">
-          <Link to="/dashboard" className="always">Mes projets</Link>
-          <span className="user-chip">
+        <Brand to="/dashboard" />
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <Link to="/dashboard" className="btn sm">Dashboard</Link>
+          <Link to="/connexions" className="user-chip" style={{ textDecoration: "none", color: "inherit" }}>
             <span className="avatar">{user ? user.charAt(0).toUpperCase() : "?"}</span>
             <span className="sub" style={{ margin: 0 }}>{user}</span>
-            <button
-              className="btn secondary sm"
-              onClick={() => {
-                logout().then(() => nav("/"));
-              }}
-            >
-              Déconnexion
-            </button>
-          </span>
-        </nav>
+          </Link>
+        </div>
       </div>
     </header>
   );

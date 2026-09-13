@@ -3,7 +3,7 @@ import { loadConfig } from "./config.js";
 import { createLlm } from "./llm/index.js";
 import { messagesIdees } from "./prompts.js";
 import { extractJson } from "./llm/openai.js";
-import { listerVoixFr } from "./voice.js";
+import { listerVoix } from "./voice.js";
 import { genererShort } from "./pipeline.js";
 
 const args = process.argv.slice(2);
@@ -33,10 +33,10 @@ async function main() {
     return;
   }
 
-  // Lister les voix FR
+  // Lister les voix
   if (args.includes("--voix")) {
-    const voix = await listerVoixFr();
-    console.log(`\nVoix FR disponibles (${voix.length}) :`);
+    const voix = await listerVoix(config.language);
+    console.log(`\nVoices available for ${config.language} (${voix.length}) :`);
     for (const v of voix) {
       const tags = v.personalities.join(", ");
       console.log(`  - ${v.name}  [${v.gender}]${tags ? `  -- ${tags}` : ""}`);

@@ -26,7 +26,7 @@ const MAX_P = 2;
 
 /** Hash un mot de passe avec un sel aleatoire (scrypt asynchrone). */
 export async function hashPassword(password: string): Promise<string> {
-  if (password.length > 512) throw new Error("Mot de passe trop long");
+  if (password.length > 512) throw new Error("Password too long");
   const salt = randomBytes(16);
   const derived = (await scryptAsync(password, salt, KEYLEN, { N, r: R, p: P, maxmem: MAXMEM })) as Buffer;
   return `scrypt$${N}$${R}$${P}$${salt.toString("base64")}$${derived.toString("base64")}`;

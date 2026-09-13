@@ -71,12 +71,18 @@ export function getUser(env: ServerEnv, userId: number): UserRow | null {
   return row ? { id: Number(row.id), username: row.username } : null;
 }
 
-/** Pose le cookie de session (HttpOnly + SameSite=Strict, + Secure en prod). */
+/**
+ * Pose le cookie de session.
+ * SameSite=Lax : indispensable pour que le cookie soit envoye sur le retour
+ * OAuth (Google -> callback), qui est une navigation top-level cross-site.
+ * En Strict il serait bloque, et la connexion YouTube echouerait. Lax garde
+ * la protection CSRF (pas de cookie sur POST cross-site) + le token CSRF dedie.
+ */
 export function setSessionCookie(res: Response, token: string, env: ServerEnv): void {
   const name = env.cookieSecure ? `__Host-${COOKIE_NAME}` : COOKIE_NAME;
   res.cookie(name, token, {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: env.cookieSecure,
     path: "/",
     maxAge: env.sessionDays * 24 * 3600 * 1000,
@@ -88,7 +94,7 @@ export function clearSessionCookie(res: Response, env: ServerEnv): void {
   res.clearCookie(name, {
     path: "/",
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: env.cookieSecure,
   });
 }

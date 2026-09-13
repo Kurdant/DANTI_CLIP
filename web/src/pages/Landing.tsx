@@ -1,61 +1,62 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth";
 import { Brand } from "../components/TopBar";
+import { CookieNote } from "../components/CookieNote";
 
 const STEPS = [
   {
     n: "01",
-    t: "Idées",
-    d: "Donne un thème, ou rien du tout. L'IA te propose 3 sujets de shorts avec un angle et un hook pensés pour accrocher en 3 secondes.",
+    t: "Ideas",
+    d: "Give a theme, or nothing at all. The AI suggests 3 short topics with an angle and a hook designed to grab attention in 3 seconds.",
   },
   {
     n: "02",
     t: "Script",
-    d: "Tu choisis l'idée qui te plaît. L'IA écrit un script structuré : hook, parties, narration complète, rythme calibré pour 30-60 s.",
+    d: "You pick the idea you like. The AI writes a structured script: hook, sections, full narration, pacing calibrated for 30-60 s.",
   },
   {
     n: "03",
-    t: "Voix",
-    d: "La voix est synthétisée en français par un moteur vocal expressif : tu écoutes, tu valides, tu regénères avec une autre voix si besoin.",
+    t: "Voice",
+    d: "The voice is synthesized in French by an expressive voice engine: you listen, approve, and regenerate with another voice if needed.",
   },
   {
     n: "04",
-    t: "Vidéo",
-    d: "Sous-titres synchronisés mot à mot dans 5 styles, fond vidéo ou solid color, export MP4 9:16 prêt pour TikTok / YouTube Shorts / Reels.",
+    t: "Video",
+    d: "Word-by-word synchronized subtitles in 5 styles, video background or solid color, 9:16 MP4 export ready for TikTok / YouTube Shorts / Reels.",
   },
 ];
 
 const FEATURES = [
-  { icon: "✦", t: "3 idées à chaque fois", d: "L'IA varie les angles — viraux, pédagogiques, intrigants — avec un hook distinct pour chaque sujet." },
-  { icon: "◈", t: "Scripts structurés", d: "Chaque script est découpé en parties, avec une idée de fond et une narration continue prête à lire." },
-  { icon: "♫", t: "Voix IA naturelles", d: "Une bibliothèque de voix françaises : Remy, Vivienne et bien d'autres. Regénère autant de fois que tu veux." },
-  { icon: "▣", t: "Sous-titres synchronisés", d: "Le montage calcule les timings mot à mot et génère des sous-titres qui suivent la voix, dans le style de ton choix." },
-  { icon: "◉", t: "Fonds vidéo perso", d: "Uploads tes propres fonds ou choisis les fonds par défaut. Chaque compte garde sa bibliothèque privée." },
-  { icon: "→", t: "Export 9:16", d: "Un MP4 vertical, prêt à publier. Tu peux aussi télécharger la voix seule pour réutiliser le script ailleurs." },
+  { icon: "✦", t: "3 ideas every time", d: "The AI varies the angles — viral, educational, intriguing — with a distinct hook for each topic." },
+  { icon: "◈", t: "Structured scripts", d: "Each script is split into sections, with a core idea and continuous narration ready to read." },
+  { icon: "♫", t: "Natural AI voices", d: "A library of French voices: Remy, Vivienne and many more. Regenerate as many times as you want." },
+  { icon: "▣", t: "Synchronized subtitles", d: "The editing engine computes word-by-word timings and generates subtitles that follow the voice, in the style of your choice." },
+  { icon: "◉", t: "Custom video backgrounds", d: "Upload your own backgrounds or choose the default ones. Each account keeps its own private library." },
+  { icon: "→", t: "9:16 export", d: "A vertical MP4, ready to publish. You can also download the voice alone to reuse the script elsewhere." },
 ];
 
-const STYLES = ["Classique", "Néon", "Gras", "Minimal", "Encadré"];
+const STYLES = ["Classic", "Neon", "Bold", "Minimal", "Outlined"];
 
 const FAQ = [
   {
-    q: "C'est quoi exactement DANTI CLIPER ?",
-    a: "Un studio de shorts quasi automatique : tu ouvres un projet, tu valides chaque étape (idées → script → voix → vidéo), et tu télécharges un MP4 9:16 sous-titré. Tu gardes le contrôle à chaque étape.",
+    q: "What exactly is DANTI CLIPER?",
+    a: "A nearly automatic shorts studio: you open a project, approve each step (ideas → script → voice → video), and download a subtitled 9:16 MP4. You stay in control at every step.",
   },
   {
-    q: "Je dois savoir monter ?",
-    a: "Non. Le montage (fond, sous-titres, voix) est généré automatiquement. Ton rôle : choisir l'idée, valider le script, écouter la voix et cliquer sur « Générer ».",
+    q: "Do I need to know how to edit?",
+    a: "No. The editing (background, subtitles, voice) is generated automatically. Your role: choose the idea, approve the script, listen to the voice and click \"Generate\".",
   },
   {
-    q: "Quelles plateformes pour mes vidéos ?",
-    a: "TikTok, YouTube Shorts et Instagram Reels : le format 9:16 (1080×1920) est exactement celui de ces plateformes.",
+    q: "Which platforms are my videos for?",
+    a: "TikTok, YouTube Shorts and Instagram Reels: the 9:16 format (1080×1920) is exactly the one used by these platforms.",
   },
   {
-    q: "Puis-je utiliser mes propres vidéos de fond ?",
-    a: "Oui. Depuis un projet, clique sur « ＋ Uploader un fond » : la vidéo est compressée automatiquement et n'est visible que par toi. Les fonds par défaut sont partagés par tout le monde.",
+    q: "Can I use my own background videos?",
+    a: "Yes. From a project, click \"＋ Upload a background\": the video is compressed automatically and is only visible to you. Default backgrounds are shared by everyone.",
   },
   {
-    q: "Mes projets sont-ils privés ?",
-    a: "Oui. Chaque compte a ses propres projets, ses fonds uploadés et son historique. La connexion est protégée (session chiffrée, HTTPS).",
+    q: "Are my projects private?",
+    a: "Yes. Each account has its own projects, uploaded backgrounds and history. The connection is protected (encrypted session, HTTPS).",
   },
 ];
 
@@ -68,15 +69,15 @@ export function LandingPage() {
         <div className="container">
           <Brand />
           <nav className="nav-links">
-            <a href="#fonctionnement">Comment ça marche</a>
-            <a href="#fonctionnalites">Fonctionnalités</a>
+            <a href="#fonctionnement">How it works</a>
+            <a href="#fonctionnalites">Features</a>
             <a href="#faq">FAQ</a>
             {user ? (
-              <Link to="/dashboard" className="btn sm">Mes projets</Link>
+              <Link to="/dashboard" className="btn sm">My projects</Link>
             ) : (
               <>
-                <Link to="/login" className="btn secondary sm">Connexion</Link>
-                <Link to="/register" className="btn sm">Commencer</Link>
+                <Link to="/login" className="btn secondary sm">Log in</Link>
+                <Link to="/register" className="btn sm">Get started</Link>
               </>
             )}
           </nav>
@@ -86,27 +87,27 @@ export function LandingPage() {
       {/* HERO */}
       <section className="container hero">
         <div>
-          <span className="kicker">✦ Studio de shorts · IA + Voix</span>
+          <span className="kicker">✦ Shorts studio · AI + Voice</span>
           <h1>
-            Ton idée devient <em>une vidéo</em> prête à publier
+            Your idea becomes <em>a video</em> ready to publish
           </h1>
           <p className="lead">
-            DANTI CLIPER génère des shorts 9:16 quasi automatiquement : sujets, script,
-            voix off et sous-titres synchronisés. Tu valides chaque étape, la machine
-            fait le montage.
+            DANTI CLIPER generates 9:16 shorts almost automatically: topics, script,
+            voice-over and synchronized subtitles. You approve each step, the machine
+            does the editing.
           </p>
           <div className="hero-ctas">
             {user ? (
-              <Link to="/dashboard" className="btn lg">Ouvrir mon dashboard →</Link>
+              <Link to="/dashboard" className="btn lg">Open my dashboard →</Link>
             ) : (
               <>
-                <Link to="/register" className="btn lg">Créer mon compte</Link>
-                <Link to="/login" className="btn secondary lg">J'ai déjà un compte</Link>
+                <Link to="/register" className="btn lg">Create my account</Link>
+                <Link to="/login" className="btn secondary lg">I already have an account</Link>
               </>
             )}
           </div>
           <div className="hero-note">
-            Un projet · idées + script + voix + vidéo · export MP4 9:16
+            One project · ideas + script + voice + video · 9:16 MP4 export
           </div>
         </div>
 
@@ -114,15 +115,15 @@ export function LandingPage() {
           <div className="phone">
             <div className="phone-screen">
               <div className="phone-caption">
-                <span className="c1">3 sujets générés</span>
-                <span className="c2">Le hook qui sauve la nuit</span>
-                <span className="c1">Voix : Remy Multilingual</span>
-                <span className="c2">♪ narration 42 s</span>
+                <span className="c1">3 topics generated</span>
+                <span className="c2">The hook that saves the night</span>
+                <span className="c1">Voice: Remy Multilingual</span>
+                <span className="c2">♪ 42 s narration</span>
               </div>
             </div>
           </div>
-          <div className="float-chip a"><span className="dot" /> IA · idées</div>
-          <div className="float-chip b"><span className="dot rose" /> Voix · Edge TTS</div>
+          <div className="float-chip a"><span className="dot" /> AI · ideas</div>
+          <div className="float-chip b"><span className="dot rose" /> Voice · Edge TTS</div>
           <div className="float-chip c"><span className="dot rose" /> MP4 · 9:16</div>
         </div>
       </section>
@@ -131,10 +132,10 @@ export function LandingPage() {
       <section className="container section" id="fonctionnement">
         <div className="section-head">
           <span className="kicker">Pipeline</span>
-          <h2 className="section-title">Quatre étapes, zéro montage</h2>
+          <h2 className="section-title">Four steps, zero editing</h2>
           <p className="section-sub">
-            Chaque étape se valide avant d'enchaîner. Ce que tu ne valides pas, tu le
-            regénères. C'est toujours toi qui décides.
+            Each step is approved before moving on. Whatever you don't approve, you
+            regenerate. You always decide.
           </p>
         </div>
         <div className="how-grid">
@@ -151,8 +152,8 @@ export function LandingPage() {
       {/* FONCTIONNALITÉS */}
       <section className="container section" id="fonctionnalites">
         <div className="section-head">
-          <span className="kicker">Fonctionnalités</span>
-          <h2 className="section-title">Un studio complet dans le navigateur</h2>
+          <span className="kicker">Features</span>
+          <h2 className="section-title">A complete studio in your browser</h2>
         </div>
         <div className="feature-grid">
           {FEATURES.map((f) => (
@@ -166,7 +167,7 @@ export function LandingPage() {
 
         <div style={{ marginTop: 34 }}>
           <div className="sub" style={{ marginBottom: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 12 }}>
-            Styles de sous-titres
+            Subtitle styles
           </div>
           <div className="row">
             {STYLES.map((s) => (
@@ -180,7 +181,7 @@ export function LandingPage() {
       <section className="container section" id="faq">
         <div className="section-head">
           <span className="kicker">FAQ</span>
-          <h2 className="section-title">Les questions qu'on me pose</h2>
+          <h2 className="section-title">Frequently asked questions</h2>
         </div>
         <div className="faq" style={{ maxWidth: 760, margin: "0 auto" }}>
           {FAQ.map((f) => (
@@ -195,23 +196,29 @@ export function LandingPage() {
       {/* CTA */}
       <section className="container section" style={{ paddingTop: 20 }}>
         <div className="cta-band">
-          <h2>Prêt à créer ton prochain short ?</h2>
+          <h2>Ready to create your next short?</h2>
           <p>
-            Crée un compte, lance un projet, laisse l'IA te proposer trois idées et
-            enchaîne jusqu'à la vidéo.
+            Create an account, start a project, let the AI suggest three ideas and
+            go all the way to the video.
           </p>
           {user ? (
-            <Link to="/dashboard" className="btn lg">Aller sur mon dashboard →</Link>
+            <Link to="/dashboard" className="btn lg">Go to my dashboard →</Link>
           ) : (
-            <Link to="/register" className="btn lg">Commencer gratuitement</Link>
+            <Link to="/register" className="btn lg">Start for free</Link>
           )}
         </div>
       </section>
 
       <footer className="container site-footer">
-        <span>© 2026 DANTI CLIPER — de l'idée à la vidéo.</span>
-        <span>Idées · Script · Voix · Vidéo — tout en un.</span>
+        <span>© 2026 DANTI CLIPER — from idea to video.</span>
+        <span>
+          <Link to="/privacy">Privacy</Link>
+          <span style={{ margin: "0 8px" }}>·</span>
+          Ideas · Script · Voice · Video — all in one.
+        </span>
       </footer>
+
+      <CookieNote />
     </div>
   );
 }

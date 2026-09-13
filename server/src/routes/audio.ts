@@ -14,9 +14,9 @@ export function audioRouter(env: ServerEnv): Router {
       "SELECT voices.file_name, voices.project_id FROM voices WHERE voices.id = ?",
       [voiceId],
     ).get() as { file_name: string; project_id: number } | undefined;
-    if (!row) throw new ApiError(404, "Voix introuvable");
+    if (!row) throw new ApiError(404, "Voice not found");
     const project = getProjectRow(env, Number(row.project_id), userId);
-    if (!project) throw new ApiError(404, "Voix introuvable");
+    if (!project) throw new ApiError(404, "Voice not found");
     return row;
   }
 

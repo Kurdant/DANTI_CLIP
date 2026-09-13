@@ -11,7 +11,7 @@ export class ApiError extends Error {
 }
 
 interface ApiOpts {
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   raw?: boolean;
 }
@@ -45,5 +45,30 @@ export async function api<T>(path: string, opts: ApiOpts = {}): Promise<T> {
     throw new ApiError(res.status, msg);
   }
   if (opts.raw) return res as unknown as T;
+  return (await res.json()) as T;
+}
+
+/** Upload de fichier (multipart) avec le jeton CSRF. Utilise pour la mascotte PNG. */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    body: fd,
+  });
+  if (!res.ok) {
+    let msg = "Erreur";
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (j.error) msg = j.error;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, msg);
+  }
   return (await res.json()) as T;
 }

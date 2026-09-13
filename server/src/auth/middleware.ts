@@ -43,19 +43,19 @@ export const attachAuth: (env: ServerEnv) => RequestHandler =
 /** Exige une authentification valide. */
 export const requireAuth: RequestHandler = (req, _res, next) => {
   if (!req.auth) {
-    return next(new ApiError(401, "Authentification requise"));
+    return next(new ApiError(401, "Authentication required"));
   }
   next();
 };
 
 /** Exige un token CSRF valide pour les requetes de modification. */
 export const csrfProtect: RequestHandler = (req, _res, next) => {
-  if (!req.auth) return next(new ApiError(401, "Authentification requise"));
+  if (!req.auth) return next(new ApiError(401, "Authentication required"));
   const methods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
   if (methods.has(req.method)) {
     const header = req.headers["x-csrf-token"];
     if (typeof header !== "string" || header !== req.auth.csrfToken) {
-      return next(new ApiError(403, "Jeton CSRF invalide"));
+      return next(new ApiError(403, "Invalid CSRF token"));
     }
   }
   next();
@@ -89,7 +89,7 @@ export const loginRateLimit: RequestHandler = (req, _res, next) => {
   }
   const current = loginAttempts.get(ip);
   if (current && current.count >= MAX_LOGIN) {
-    return next(new ApiError(429, "Trop de tentatives. Reessayez dans 15 minutes."));
+    return next(new ApiError(429, "Too many attempts. Try again in 15 minutes."));
   }
   if (current) {
     current.count += 1;

@@ -28,9 +28,9 @@ export function loadConfig(): AppConfig {
     llmBaseUrl: readEnv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
     llmApiKey: readEnv("LLM_API_KEY"),
     llmModel: readEnv("LLM_MODEL", "llama-3.3-70b-versatile"),
-    edgeVoice: readEnv("EDGE_VOICE", "fr-FR-HenriNeural"),
+    edgeVoice: readEnv("EDGE_VOICE", "en-US-AndrewMultilingualNeural"),
     outputDir: readEnv("OUTPUT_DIR", "output"),
     nIdeas: Number(readEnv("N_IDEES", "3")) || 3,
-    language: readEnv("LANGUAGE", "fr"),
+    language: readEnv("LANGUAGE", "en"),
   };
 }
