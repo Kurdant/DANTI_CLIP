@@ -418,19 +418,29 @@ export function ProjectPage() {
                       Regenerate{busy === "ideas" && <span className="spinner" />}
                     </button>
                   </div>
-                  {project!.ideas!.map((i) => (
+                  {project!.ideas!.slice(0, 3).map((i) => {
+                    const scoreColor = i.scoreStatus === "rejected" ? "#c25b52" : i.totalScore != null && i.totalScore >= 0.7 ? "#37a06b" : "#d99a2b";
+                    return (
                     <div
                       key={i.id}
                       className={"idea" + (i.id === project?.selectedIdeaId ? " selected" : "")}
                       style={{ cursor: "pointer" }}
                       onClick={() => act("sel", () => api(`/api/projects/${pid}/select-idea`, { method: "POST", body: { ideaId: i.id } }))}
                     >
-                      <strong>{i.position}. {i.titre || i.ideaText}</strong>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                        <strong>{i.titre || i.ideaText}</strong>
+                        {i.totalScore != null && (
+                          <span style={{ fontSize: 12, fontWeight: 800, color: "#fff", background: scoreColor, padding: "2px 9px", borderRadius: 10, whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {Math.round(i.totalScore * 100)}/100
+                          </span>
+                        )}
+                      </div>
                       <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Topic: {i.ideaText}</div>
                       <div className="hook">HOOK : {i.hook}</div>
                       {i.fond && <div className="muted">Background: {i.fond}</div>}
                     </div>
-                  ))}
+                    );
+                  })}
                   <button
                     className="btn"
                     style={{ marginTop: 8 }}

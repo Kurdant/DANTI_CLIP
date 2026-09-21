@@ -185,7 +185,10 @@ export async function rendreVideo(opts: MontageOptions, onProgress?: (fraction: 
   // Audio : voix (obligatoire) + musique optionnelle duckee + sound effects.
   const voiceIdx = nextIdx++;
   args.push("-i", audioAbs);
-  let audioMap = `${voiceIdx}:a`;
+  // La chaine audio produit toujours [audio] (voix + musique ducke). Sans SFX,
+  // c'est [audio] qui doit etre mappe ; le mapper sur l'input brut laissait la
+  // sortie [audio] non connectee => ffmpeg "output unconnected / Invalid argument".
+  let audioMap = "[audio]";
   const sfxList = opts.sfx ?? [];
 
   // Base : voix seule, ou voix + musique duckee sous la voix.
@@ -197,14 +200,14 @@ export async function rendreVideo(opts: MontageOptions, onProgress?: (fraction: 
     parts.push(`[${voiceIdx}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,asplit=2[voix][sc]`);
     parts.push(`[${musicIdx}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,volume=${vol}[mus]`);
     parts.push(`[mus][sc]sidechaincompress=threshold=0.05:ratio=10:attack=15:release=350[musduck]`);
-    parts.push(`[voix][musduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[base]`);
+    parts.push(`[voix][musduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[audio]`);
   } else {
-    parts.push(`[${voiceIdx}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[base]`);
+    parts.push(`[${voiceIdx}:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[audio]`);
   }
 
   // Sound effects : un input par effet, place dans le temps (adelay), puis mix.
   if (sfxList.length > 0) {
-    const mixInputs: string[] = ["[base]"];
+    const mixInputs: string[] = ["[audio]"];
     sfxList.forEach((s, i) => {
       const idx = nextIdx++;
       const ms = Math.max(0, Math.round(s.atMs));

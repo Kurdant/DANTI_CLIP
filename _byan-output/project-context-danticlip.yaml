@@ -1,0 +1,154 @@
+project_name: "danticlip"
+project_description: "Generateur quasi-automatique de Shorts : idee -> script -> voix -> montage -> publication, pour YouTube Shorts / TikTok / Reels."
+domain: "Creation de contenu video court (Shorts / Reels / TikTok)"
+subdomain: "Croissance de canal video a partir de zero"
+maturity_level: "dev"
+stack_tech:
+  backend:
+    - "Node.js"
+    - "TypeScript"
+    - "Express"
+    - "SQLite (node:sqlite)"
+  frontend:
+    - "React"
+    - "Vite"
+  infrastructure:
+    - "ffmpeg (montage)"
+    - "Edge TTS (synthese vocale)"
+    - "API LLM compatible OpenAI (Groq par defaut)"
+  databases:
+    - "SQLite"
+  constraints:
+    - "Format vertical 9:16 (1080x1920)"
+    - "Langue de contenu : francais"
+    - "Contenu sans debordement (safe) : rien d'illegal, choquant, politique, sanitaire douteux"
+team:
+  size: 1
+  skills:
+    - "Fullstack solo (Yan)"
+  methodology: "Agile, iteatif, MVP"
+pain_points:
+  - "0 vue reelle sur 8 videos publiees (compte a 3 abonnes)"
+  - "Videos trop longues (60-91s) pour la retention Shorts"
+  - "Ton clivant force (mots arabes obligatoires en hook)"
+  - "Pas de boucle / rewatch en fin de video"
+  - "Format storytelling fictif sature et percu comme fake"
+  - "Niche heterogene (thriller + productivite) : pas de signal clair"
+root_cause: "Le contenu genere ne maximise pas la retention Shorts : hooks clivants, duree trop longue, pas de rewatch, format sature. Sans signal d'engagement, l'algorithme ne pousse pas le canal."
+goals:
+  - "Faire des vues sur les Shorts (canal neuf)"
+  - "Produire des videos qui retiennent des la 1ere seconde"
+  - "Choisir des sujets a fort potentiel de decouverte"
+success_criteria:
+  - "Premieres videos au-dela de la poussee initiale (vues reelles hors de Yan lui-meme)"
+  - "Retention au-dessus de la moyenne sur les videos produites"
+  - "Un format coherent qui s'identifie (niche claire)"
+
+# ---------- MCD / glossaire (Data Dictionary First) ----------
+glossaire:
+  short:
+    definition: "Video verticale courte (15-60s) au format 9:16, publiee sur YouTube Shorts / TikTok / Reels."
+    synonyms: ["reel", "tiktok", "video courte"]
+    examples: ["Un short de 30s sur un fait insolite"]
+  hook:
+    definition: "La 1-2eme seconde qui bloque le scroll. C'est la porte d'entree de la retention."
+    synonyms: ["accroche", "attention grabber"]
+    examples: ["Un chiffre qui surprend, une contradiction, une question tendue"]
+  retention:
+    definition: "Pourcentage de la video regarde par le public. Metrique cle que l'algorithme utilise pour amplifier ou couper."
+    synonyms: ["taux de retention", "watch time"]
+    examples: ["Une video a 80% de retention est amplifiee"]
+  rewatch:
+    definition: "Revoir la video en boucle. Signal fort pour l'algorithme ; on le provoque par un twist qui renvoie au debut."
+    synonyms: ["boucle", "loop", "replay"]
+    examples: ["La chute renvoie au hook => le spectateur re-regarde"]
+  cta:
+    definition: "Appel a l'action (abonnement, commentaire, partage) place en fin de video."
+    synonyms: ["call to action"]
+    examples: ["Abonne-toi pour la suite"]
+  niche:
+    definition: "Theme coherent et identifiable du canal. L'algorithme et le public doivent associer le canal a UNE chose."
+    synonyms: ["positionnement", "theme"]
+    examples: ["Culture generale : faits insolites, chiffres, mythes"]
+  titre_seo:
+    definition: "Titre optimise pour la decouverte (max 100 caracteres) : accrocheur + mots-cles."
+    synonyms: ["titre youtube", "titre optimise"]
+    examples: ["Ce chiffre sur la prodigie va te choquer"]
+  hashtags:
+    definition: "Mots-cles (sans #) pour la decouverte dans le referencement des videos."
+    synonyms: ["tags", "mots-cles"]
+    examples: ["culture-generale", "fait-insolite", "shorts"]
+  angle:
+    definition: "L'angle narratif du sujet : curiosite, contraire-a-l'opinion, chiffre, astuce, mythe."
+    synonyms: ["approche", "perspective"]
+    examples: ["Curiosite", "mythe demystifie", "chiffre qui surprend"]
+  boucle:
+    definition: "Structure de script ou la fin renvoie au debut pour provoquer le rewatch."
+    synonyms: ["loop", "boucle de retention"]
+    examples: ["La chute fait echo a la premiere phrase"]
+
+acteurs:
+  - name: "createur (Yan)"
+    type: "internal"
+    permissions: ["choisit les sujets", "publie les videos", "valide le contenu"]
+    description: "L'utilisateur qui pilote le canal et utilise le pipeline."
+  - name: "algorithme Shorts"
+    type: "system"
+    permissions: ["distribue les videos selon la retention et l'engagement"]
+    description: "Le systeme de distribution algorithmique du feed Shorts."
+  - name: "public"
+    type: "external"
+    permissions: ["regarde", "scrolle", "s'abonne", "commente", "partage"]
+    description: "L'audience qui decide, par son comportement, si une video est poussee."
+
+processus_metier:
+  - name: "Generation d'un short"
+    description: "idee -> script -> voix -> montage -> publication"
+    steps:
+      - "Choisir un sujet (concept / angle)"
+      - "Generer les idees (LLM)"
+      - "Ecrire le script optimise retention (hook 1ere seconde + boucle)"
+      - "Synthese vocale (Edge TTS)"
+      - "Montage 9:16 avec sous-titres"
+      - "Publication (titre, description, hashtags)"
+    criticity: "critical"
+  - name: "Optimisation de la retention"
+    description: "Iterer sur hook, duree, boucle pour maximiser la retention"
+    steps:
+      - "Auditer le hook et la duree"
+      - "Identifier le point de chute de retention"
+      - "Renforcer le hook et la boucle"
+    criticity: "high"
+
+regles_gestion:
+  - id: "RG-001"
+    description: "Contenu sans debordement : rien d'illegal, dangereux, choquant, diffamatoire, politique, religieux, sanitaire douteux ou a caractere sexuel."
+    priority: "critical"
+    regulatory: true
+  - id: "RG-002"
+    description: "Le hook doit etre dans la 1-2eme seconde ; aucun 'bonjour', aucun remplissage."
+    priority: "critical"
+    regulatory: false
+  - id: "RG-003"
+    description: "Duree de narration cible 25-40s pour un compte neuf (retention optimale)."
+    priority: "high"
+    regulatory: false
+  - id: "RG-004"
+    description: "Le hook est le vrai titre ; le titre publie doit etre SEO (max 100 caracteres, accrocheur)."
+    priority: "high"
+    regulatory: false
+  - id: "RG-005"
+    description: "Pas de clickbait mensonger : la promesse du hook doit etre tenue par le contenu."
+    priority: "high"
+    regulatory: false
+  - id: "RG-006"
+    description: "Niche coherente : rester sur un theme identifiable (culture generale)."
+    priority: "medium"
+    regulatory: false
+
+edge_cases:
+  - "Le LLM deborde sur la duree cible (60-91s au lieu de 25-40s)."
+  - "Le hook contient un ton clivant qui perd le public general."
+  - "La chute ne fait pas echo au hook => pas de rewatch."
+  - "Rendu video casse (0s ou 2s) a cause d'un montage foireux."
+  - "Pas de donnee de retention exploitable sur un compte neuf (0 vue reelle)."

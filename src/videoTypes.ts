@@ -15,7 +15,7 @@ export interface VideoTypeDef {
   label: string;
   description: string;
   messagesIdees: (opts: { topic: string; nIdeas: number; language?: string; usedTopics?: string[] }) => LlmMessage[];
-  messagesScript: (opts: { idea: string; language?: string }) => LlmMessage[];
+  messagesScript: (opts: { idea: string; language?: string; hook?: string; feedback?: string }) => LlmMessage[];
 }
 
 export const DEFAULT_VIDEO_TYPE = "culture-generale";

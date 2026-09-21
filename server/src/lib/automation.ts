@@ -24,6 +24,7 @@ export interface AutomationRow {
   topic: string;
   privacy: string;
   timezone: string;
+  language: string | null;
   music_enabled?: number | null;
   music_track?: string | null;
   music_volume?: number | null;
@@ -206,7 +207,12 @@ async function runAutomation(env: ServerEnv, rule: AutomationRow): Promise<Recor
   const projectId = createProjectForAutomation(env, rule);
   const rate = rule.voice_rate != null ? toRate(Number(rule.voice_rate)) : undefined;
   const pitch = rule.voice_pitch != null ? toPitch(Number(rule.voice_pitch)) : undefined;
-  const videoId = await generateProject(env, projectId, { voiceName: rule.voice_name || undefined, rate, pitch });
+  const videoId = await generateProject(env, projectId, {
+    voiceName: rule.voice_name || undefined,
+    rate,
+    pitch,
+    language: rule.language || undefined,
+  });
 
   // La video publiee ne doit jamais etre purgee.
   dbQuery(env, "UPDATE videos SET kept = 1 WHERE id = ?", [videoId]).run();

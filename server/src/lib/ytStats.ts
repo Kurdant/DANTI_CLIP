@@ -1,5 +1,6 @@
 import type { ServerEnv } from "./env.js";
 import { dbQuery } from "../auth/middleware.js";
+import { logContentEvent } from "../../../src/content-engine/logging.js";
 
 // ============================================================
 // STATS YOUTUBE (chantier 2a) - vues / likes / commentaires.
@@ -86,13 +87,28 @@ export async function refreshUserVideoStats(env: ServerEnv, userId: number): Pro
         continue;
       }
       const s = item.statistics ?? {};
+      const views = parseCount(s.viewCount);
+      const likes = parseCount(s.likeCount);
+      const comments = parseCount(s.commentCount);
       dbQuery(
         env,
         "UPDATE videos SET views = ?, likes = ?, comments = ?, stats_status = 'ok', stats_updated_at = datetime('now') WHERE id = ?",
-        [parseCount(s.viewCount) ?? 0, parseCount(s.likeCount), parseCount(s.commentCount), row.id],
+        [views, likes, comments, row.id],
+      ).run();
+      // Snapshot historise (lot 6) : les absents restent null, jamais un faux zero.
+      dbQuery(
+        env,
+        "INSERT INTO video_stats (video_id, views, likes, comments, source) VALUES (?, ?, ?, ?, 'youtube_data_api')",
+        [row.id, views, likes, comments],
       ).run();
       result.updated++;
     }
+  }
+  if (result.updated > 0) {
+    logContentEvent("ANALYTICS_UPDATED", {
+      userId,
+      data: { updated: result.updated, missing: result.missing, source: "youtube_data_api" },
+    });
   }
   return result;
 }

@@ -8,8 +8,7 @@ import { messagesImageQueries } from "./prompts.js";
 import type { PartImage } from "./montage.js";
 import type { WordBoundaryLike } from "./subs.js";
 import type { LlmProvider } from "./llm/types.js";
-import { extractJson } from "./llm/openai.js";
-
+import { parseLlmJson, imageQueriesSchema } from "./llm/schemas.js";
 // ============================================================
 // IMAGES (piste B) - illustration par segment de narration via Pexels.
 //   - decoupe le texte_continu en segments (phrases, clauses si longues)
@@ -329,10 +328,8 @@ export async function fetchPartImages(opts: {
   if (llm && chunks.length > 0) {
     try {
       const raw = await llm.complete(messagesImageQueries({ subject, segments: chunks }));
-      const parsed = extractJson<{ queries?: unknown }>(raw);
-      if (Array.isArray(parsed.queries)) {
-        queries = parsed.queries.map((q) => (typeof q === "string" ? q.trim() : "")).filter(Boolean);
-      }
+      const parsed = parseLlmJson(imageQueriesSchema, raw, "requetes images");
+      queries = parsed.queries;
     } catch (e) {
       console.error("[images] generation requetes LLM echec, fallback mots-clefs:", e);
       queries = [];

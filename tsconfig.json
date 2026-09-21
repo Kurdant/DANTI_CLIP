@@ -11,8 +11,9 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "sourceMap": true
+    "sourceMap": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "server/**/*.ts"],
+  "include": ["src/**/*.ts", "server/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

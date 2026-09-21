@@ -79,6 +79,7 @@ export const createAutomationSchema = z.object({
   topic: z.string().trim().max(500).optional(),
   privacy: z.enum(["private", "unlisted", "public"]).optional(),
   timezone: z.string().min(1).max(100).optional(),
+  language: z.string().trim().max(20).nullable().optional(),
   musicEnabled: z.boolean().optional(),
   musicTrack: z.string().min(1).max(200).nullable().optional(),
   musicVolume: z.number().min(0).max(1).optional(),

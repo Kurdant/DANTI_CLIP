@@ -2,7 +2,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { AppConfig } from "./config.js";
 import type { LlmProvider } from "./llm/types.js";
-import { extractJson } from "./llm/openai.js";
+import { parseLlmJson, ideasResultSchema, scriptResultSchema } from "./llm/schemas.js";
 import {
   messagesIdees,
   messagesScript,
@@ -34,7 +34,7 @@ export async function genererShort(
   const ideesRaw = await llm.complete(
     messagesIdees({ topic, nIdeas: config.nIdeas, language: config.language }),
   );
-  const idees = extractJson<IdeasResult>(ideesRaw).idees;
+  const idees = parseLlmJson(ideasResultSchema, ideesRaw, "idees").idees;
   const ideaIndex = Math.min(opts?.ideaIndex ?? 0, idees.length - 1);
   const ideaRetenue = idees[ideaIndex];
 
@@ -48,7 +48,7 @@ export async function genererShort(
   const scriptRaw = await llm.complete(
     messagesScript({ idea: ideaRetenue.sujet, language: config.language }),
   );
-  const script = extractJson<ScriptResult>(scriptRaw);
+  const script = parseLlmJson(scriptResultSchema, scriptRaw, "script");
 
   await writeFile(
     path.join(config.outputDir, "script.json"),

@@ -13,8 +13,9 @@ import { pickMusic } from "../lib/music.js";
 import { pickSfx, resolveSfxAbs } from "../lib/sfx.js";
 import { uniqueVideoName } from "../lib/videoprocess.js";
 import { loadConfig } from "../../../src/config.js";
-import { createLlm, extractJson } from "../../../src/llm/index.js";
-import { type IdeasResult, type ScriptResult } from "../../../src/prompts.js";
+import { createContentLlms } from "../../../src/llm/index.js";
+import { parseLlmJson, ideasResultSchema, scriptResultSchema, type ScriptResultParsed } from "../../../src/llm/schemas.js";
+import { type ScriptResult } from "../../../src/prompts.js";
 import { getVideoType } from "../../../src/videoTypes.js";
 import { syntheseVoix, listerVoix } from "../../../src/voice.js";
 import { ttsRemainingChars, ttsRecordChars } from "../lib/ttsQuota.js";
@@ -22,6 +23,16 @@ import { buildAss, assForStyle, buildHookIntroAss, TEXT_STYLES, type TextStyle, 
 import { extractHighlights } from "../../../src/overlays.js";
 import { fetchPartImages } from "../../../src/images.js";
 import { rendreVideo, type PartImage } from "../../../src/montage.js";
+import { saveIdeasAsCandidates, selectBestCandidateId, ideaIdForCandidate, markCandidateSelected, candidateForIdea, selectedCandidateForProject, saveHooks, selectBestHookId, bestHookText, markHookSelected, linkVideoCategories, archiveProjectCandidates, hooksForCandidate, candidatesForProject, candidateScoreMap, type IdeaInput, type CandidateRow, type HookRow } from "../lib/contentEngine.js";
+import { evaluateTopics, evaluateHooks } from "../../../src/content-engine/evaluator.js";
+import { generateHooks, type HookVariant } from "../../../src/content-engine/hooks.js";
+import { selectFinalContent, type FinalCandidateInput } from "../../../src/content-engine/final-selection.js";
+import { factCheckScript } from "../../../src/content-engine/fact-check.js";
+import { loadContentEngineConfig, type HookScoringConfig } from "../../../src/content-engine/config.js";
+import { logContentEvent } from "../../../src/content-engine/logging.js";
+import { computeAndPersistRecommendation } from "../lib/learning.js";
+import type { HookScores } from "../../../src/content-engine/scoring.js";
+import type { LlmProvider } from "../../../src/llm/types.js";
 
 const fsExistsSync = (p: string) => fs.existsSync(p);
 
@@ -63,6 +74,239 @@ function recordTopics(env: ServerEnv, userId: number, topics: string[]): void {
   }
 }
 
+/** Evalue les idees (juge) et les persiste comme candidats scores. Repli heuristique si l'evaluation echoue. */
+async function persistScoredCandidates(
+  env: ServerEnv,
+  project: ProjectRowLite,
+  idees: IdeaInput[],
+  judge: LlmProvider,
+  language: string,
+): Promise<void> {
+  let evaluations;
+  try {
+    evaluations = await evaluateTopics(judge, idees.map((i) => i.sujet ?? i.titre ?? ""), language);
+  } catch (e) {
+    console.error("[content] evaluation LLM echec, repli heuristique:", e);
+    evaluations = undefined;
+  }
+  saveIdeasAsCandidates(env, project.user_id, project.id, idees, evaluations, loadContentEngineConfig().topicScoring);
+}
+
+/** Langue effective d'un compte : regle explicite > config globale (LANGUAGE). */
+export function resolveLanguage(env: ServerEnv, userId: number, fallback: string): string {
+  const row = dbQuery(env, "SELECT language FROM users WHERE id = ?", [userId]).get() as { language: string | null } | undefined;
+  return row?.language?.trim() || fallback;
+}
+
+const NEUTRAL_HOOK_SCORES: HookScores = {
+  curiosity: 0.6, clarity: 0.6, specificity: 0.6, surprise: 0.6,
+  emotionalImpact: 0.6, openLoop: 0.6, credibility: 0.6, scrollStoppingPotential: 0.6,
+};
+
+/**
+ * Hook Engine : pour un candidat, genere N variantes (generator), les evalue
+ * (judge), les persiste et retourne le meilleur hook + la liste des variantes.
+ */
+async function ensureHooksForCandidate(
+  env: ServerEnv,
+  candidate: CandidateRow,
+  generator: LlmProvider,
+  judge: LlmProvider,
+  language: string,
+  hookConfig: HookScoringConfig,
+): Promise<{ bestHookId: number | null; hooks: HookRow[] }> {
+  let hookId = selectBestHookId(env, candidate.id);
+  if (hookId == null) {
+    try {
+      const variants: HookVariant[] = await generateHooks(generator, candidate.idea_text, {
+        angle: candidate.angle || undefined,
+        language,
+        count: hookConfig.variantsPerTopic,
+      });
+      let evaluations;
+      try {
+        evaluations = await evaluateHooks(judge, variants.map((v) => v.hook_text), language);
+      } catch (e) {
+        console.error("[content] evaluation hooks LLM echec, scores neutres:", e);
+        evaluations = undefined;
+      }
+      saveHooks(
+        env,
+        candidate.id,
+        variants.map((v, i) => ({
+          hook_text: v.hook_text,
+          pattern: v.pattern,
+          scores: evaluations?.[i]?.scores ?? NEUTRAL_HOOK_SCORES,
+          justification: evaluations?.[i]?.justification ?? "evaluation LLM indisponible - scores neutres",
+        })),
+        hookConfig,
+      );
+      logContentEvent("HOOK_GENERATED", {
+        topicCandidateId: candidate.id,
+        data: { count: variants.length },
+      });
+      hookId = selectBestHookId(env, candidate.id);
+    } catch (e) {
+      console.error("[content] generation hooks echec, script sans hook fixe:", e);
+      return { bestHookId: null, hooks: [] };
+    }
+  }
+  return { bestHookId: hookId, hooks: hooksForCandidate(env, candidate.id) };
+}
+
+/**
+ * Selection auto (flux Yan) : hooks pour le top K des candidats, puis le juge
+ * choisit le couple (candidat, hook) gagnant. Repli deterministe sur le
+ * meilleur score si le juge echoue. Persiste la selection (idee + candidat +
+ * hook) et retourne le hook retenu.
+ */
+export async function runAutoContentSelection(
+  env: ServerEnv,
+  project: ProjectRowLite,
+  generator: LlmProvider,
+  judge: LlmProvider,
+  language: string,
+  ceConfig: ReturnType<typeof loadContentEngineConfig>,
+): Promise<{ hookId: number | null; hookText: string | null }> {
+  const candidates = candidatesForProject(env, project.id)
+    .filter((c) => c.status !== "rejected")
+    .slice(0, Math.max(1, ceConfig.selection.topKCandidates));
+  if (candidates.length === 0) return { hookId: null, hookText: null };
+
+  const bundles = new Map<number, { bestHookId: number | null; hooks: HookRow[] }>();
+  for (const c of candidates) {
+    bundles.set(c.id, await ensureHooksForCandidate(env, c, generator, judge, language, ceConfig.hookScoring));
+  }
+
+  const inputs: FinalCandidateInput[] = candidates.map((c, i) => ({
+    index: i + 1,
+    title: c.title,
+    idea_text: c.idea_text,
+    angle: c.angle,
+    total: c.total_score ?? 0,
+    banality: c.banality_score ?? 0,
+    credibility: c.credibility_score ?? 0,
+    hooks: (bundles.get(c.id)?.hooks ?? []).map((h, hi) => ({
+      index: hi + 1,
+      text: h.hook_text,
+      pattern: h.pattern,
+      total: h.total_score ?? 0,
+    })),
+  }));
+
+  let chosen = null;
+  try {
+    chosen = await selectFinalContent(judge, inputs, language);
+  } catch (e) {
+    console.error("[content] selection finale juge echec, repli deterministe:", e);
+  }
+
+  // Repli deterministe : meilleur candidat + meilleur hook de ce candidat.
+  let chosenCandidate = candidates[0];
+  let chosenHookId = bundles.get(chosenCandidate.id)?.bestHookId ?? null;
+  if (chosen) {
+    const cand = candidates[chosen.candidateIndex - 1];
+    if (cand) {
+      chosenCandidate = cand;
+      const hook = bundles.get(cand.id)?.hooks[chosen.hookIndex - 1];
+      if (hook) chosenHookId = hook.id;
+    }
+  }
+
+  const chosenIdeaId = ideaIdForCandidate(env, project.id, chosenCandidate.id);
+  const ideasNow = getIdeas(env, project.id);
+  dbQuery(env, "UPDATE projects SET selected_idea_id = ? WHERE id = ?", [chosenIdeaId ?? ideasNow[0]?.id ?? null, project.id]).run();
+  markCandidateSelected(env, chosenCandidate.id);
+  if (chosenHookId != null) markHookSelected(env, chosenHookId);
+  logContentEvent("TOPIC_SELECTED", {
+    userId: project.user_id,
+    projectId: project.id,
+    topicCandidateId: chosenCandidate.id,
+    data: { auto: true, via: chosen ? "juge" : "repli", justification: chosen?.justification ?? null },
+  });
+
+  // Le texte retourne doit etre celui du hook CHOISI (pas le meilleur au score).
+  const chosenHookText =
+    chosenHookId != null
+      ? (bundles.get(chosenCandidate.id)?.hooks.find((h) => h.id === chosenHookId)?.hook_text ?? null)
+      : null;
+  return { hookId: chosenHookId, hookText: chosenHookText };
+}
+
+/**
+ * Script par le juge + fact-check avec correction (phase 11). Si le juge est
+ * indisponible (quota/saturation), repli sur `fallbackProvider` (le
+ * generateur) avec le meme prompt : le script est produit quoi qu'il arrive,
+ * en mode degrade signale. Si le fact-check bloque apres le nombre maximal de
+ * corrections : erreur explicite.
+ */
+export async function generateScriptWithFactCheck(
+  env: ServerEnv,
+  project: ProjectRowLite,
+  videoType: ReturnType<typeof getVideoType>,
+  ideaText: string,
+  hookText: string | null,
+  language: string,
+  judge: LlmProvider,
+  fallbackProvider?: LlmProvider,
+): Promise<{ script: ScriptResultParsed }> {
+  const ceConfig = loadContentEngineConfig();
+
+  const generate = async (provider: LlmProvider, feedback?: string) =>
+    parseLlmJson(
+      scriptResultSchema,
+      await provider.complete(videoType.messagesScript({ idea: ideaText, language, hook: hookText ?? undefined, feedback })),
+      "script",
+    );
+
+  let script: ScriptResultParsed;
+  try {
+    script = await generate(judge);
+  } catch (e) {
+    if (!fallbackProvider) throw e;
+    console.warn("[content] juge indisponible, script genere par le generateur (mode degrade):", e);
+    script = await generate(fallbackProvider);
+  }
+  if (!ceConfig.factCheck.enabled) return { script };
+
+  for (let round = 0; round <= ceConfig.factCheck.maxCorrections; round++) {
+    let report;
+    try {
+      report = await factCheckScript(judge, script.texte_continu, script.hook, language);
+    } catch (e) {
+      if (fallbackProvider) {
+        try {
+          report = await factCheckScript(fallbackProvider, script.texte_continu, script.hook, language);
+        } catch (e2) {
+          console.error("[content] fact check indisponible (juge et generateur), script accepte sans verification:", e2);
+          return { script };
+        }
+      } else {
+        console.error("[content] fact check indisponible, script accepte sans verification:", e);
+        return { script };
+      }
+    }
+    if (!report.blocking) return { script };
+    if (round >= ceConfig.factCheck.maxCorrections) {
+      logContentEvent("FACT_CHECK_FAILED", {
+        userId: project.user_id,
+        projectId: project.id,
+        data: { reasons: report.blockingReasons },
+      });
+      throw new Error(`Fact check bloque : ${report.blockingReasons.join(" ; ")}`);
+    }
+    console.warn("[content] fact check : correction demandee :", report.blockingReasons.join(" ; "));
+    try {
+      script = await generate(judge, report.blockingReasons.join("\n"));
+    } catch (e) {
+      if (!fallbackProvider) throw e;
+      console.warn("[content] juge indisponible pour la correction, generateur (mode degrade):", e);
+      script = await generate(fallbackProvider, report.blockingReasons.join("\n"));
+    }
+  }
+  return { script };
+}
+
 interface ProjectRowLite {
   id: number;
   user_id: number;
@@ -89,6 +333,8 @@ interface ProjectRowLite {
 }
 interface JobState { step: string; progress: number; running: boolean; error?: string }
 type Jobs = Map<number, JobState>;
+/** Fonction de rendu injectable (testabilité ; défaut = startVideoRender). */
+export type RenderFn = (env: ServerEnv, project: ProjectRowLite, jobs: Jobs) => Promise<number>;
 
 /** Convertit un nombre en prosodie Edge TTS : 8 -> "+8%", -2 -> "-2Hz". */
 export function toRate(n: number): string {
@@ -96,6 +342,81 @@ export function toRate(n: number): string {
 }
 export function toPitch(n: number): string {
   return `${n >= 0 ? "+" : ""}${Math.round(n)}Hz`;
+}
+
+// ------------------------------------------------------------
+// Cohérence des dépendances (idée -> script -> voix)
+// ------------------------------------------------------------
+
+/**
+ * Décide s'il faut regénérer le script ou la voix d'un projet auto.
+ * Les dates viennent de SQLite (format "YYYY-MM-DD HH:MM:SS", comparables
+ * lexicographiquement). Règles :
+ *  - script : absent, ou idée sélectionnée plus récente que le script (le
+ *    thème/l'idée a changé depuis la génération) ;
+ *  - voix : absente, script regénéré, script plus récent que la voix, ou voix
+ *    liée à un autre script que le script sélectionné.
+ */
+export interface RegenerationInput {
+  mode: string;
+  selectedIdeaAt: string | null;
+  selectedScriptAt: string | null;
+  selectedVoiceAt: string | null;
+  voiceScriptId: number | null;
+  selectedScriptId: number | null;
+  hasScripts: boolean;
+  hasVoices: boolean;
+}
+
+export function decideRegeneration(i: RegenerationInput): { regenScript: boolean; regenVoice: boolean } {
+  if (i.mode !== "auto") return { regenScript: false, regenVoice: false };
+  const ideaAfterScript = i.selectedIdeaAt != null && i.selectedScriptAt != null && i.selectedIdeaAt > i.selectedScriptAt;
+  const regenScript = !i.hasScripts || ideaAfterScript;
+  const scriptAfterVoice = i.selectedScriptAt != null && i.selectedVoiceAt != null && i.selectedScriptAt > i.selectedVoiceAt;
+  const voiceMismatch = i.selectedScriptId != null && i.voiceScriptId != null && i.voiceScriptId !== i.selectedScriptId;
+  const regenVoice = !i.hasVoices || regenScript || scriptAfterVoice || voiceMismatch;
+  return { regenScript, regenVoice };
+}
+
+function gatherRegenInputs(env: ServerEnv, project: ProjectRowLite): RegenerationInput {
+  const idea = project.selected_idea_id
+    ? (dbQuery(env, "SELECT created_at FROM ideas WHERE id = ? AND project_id = ?", [project.selected_idea_id, project.id]).get() as { created_at: string } | undefined)
+    : undefined;
+  const script = project.selected_script_id
+    ? (dbQuery(env, "SELECT created_at FROM scripts WHERE id = ? AND project_id = ?", [project.selected_script_id, project.id]).get() as { created_at: string } | undefined)
+    : undefined;
+  const voice = project.selected_voice_id
+    ? (dbQuery(env, "SELECT script_id, created_at FROM voices WHERE id = ? AND project_id = ?", [project.selected_voice_id, project.id]).get() as { script_id: number | null; created_at: string } | undefined)
+    : undefined;
+  return {
+    mode: project.mode,
+    selectedIdeaAt: idea?.created_at ?? null,
+    selectedScriptAt: script?.created_at ?? null,
+    selectedVoiceAt: voice?.created_at ?? null,
+    voiceScriptId: voice?.script_id != null ? Number(voice.script_id) : null,
+    selectedScriptId: project.selected_script_id,
+    hasScripts: (dbQuery(env, "SELECT COUNT(*) AS n FROM scripts WHERE project_id = ?", [project.id]).get() as { n: number }).n > 0,
+    hasVoices: (dbQuery(env, "SELECT COUNT(*) AS n FROM voices WHERE project_id = ?", [project.id]).get() as { n: number }).n > 0,
+  };
+}
+
+/** Supprime les voix du projet (fichiers + lignes) et déselectionne la voix. */
+function deleteProjectVoices(env: ServerEnv, projectId: number, outputDir: string): void {
+  const dir = path.resolve(outputDir, "projects", String(projectId));
+  const voices = dbQuery(env, "SELECT file_name, subs_file, wb_file FROM voices WHERE project_id = ?", [projectId]).all() as {
+    file_name: string;
+    subs_file: string | null;
+    wb_file: string | null;
+  }[];
+  for (const v of voices) {
+    for (const f of [v.file_name, v.subs_file, v.wb_file]) {
+      if (f) {
+        try { fs.rmSync(path.join(dir, f), { force: true }); } catch { /* fichier absent */ }
+      }
+    }
+  }
+  dbQuery(env, "DELETE FROM voices WHERE project_id = ?", [projectId]).run();
+  dbQuery(env, "UPDATE projects SET selected_voice_id = NULL WHERE id = ?", [projectId]).run();
 }
 
 /**
@@ -126,7 +447,8 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
     if (!voiceRow) throw new Error("No voice: generate the voice first (step 3)");
 
     const config = loadConfig();
-    const llm = createLlm(config);
+    // Requetes d'images : le generateur (DeepSeek) suffit, pas besoin du juge.
+    const llm = createContentLlms(config).generator;
     const dir = path.resolve(config.outputDir, "projects", String(project.id));
     const audioAbs = path.join(dir, String(voiceRow.file_name));
 
@@ -137,7 +459,7 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
     if (fsExistsSync(userMascot)) mascot = userMascot;
 
     const scriptRow = voiceRow.script_id
-      ? dbQuery(env, "SELECT script_json FROM scripts WHERE id = ? AND project_id = ?", [Number(voiceRow.script_id), project.id]).get() as { script_json: string } | undefined
+      ? dbQuery(env, "SELECT script_json, hook_id FROM scripts WHERE id = ? AND project_id = ?", [Number(voiceRow.script_id), project.id]).get() as { script_json: string; hook_id: number | null } | undefined
       : undefined;
     let script: ScriptResult | null = null;
     try { script = scriptRow ? (JSON.parse(scriptRow.script_json) as ScriptResult) : null; } catch { script = null; }
@@ -278,11 +600,14 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
       },
     );
     const duration = await probeDuration(path.join(dir, outName));
+    const candidate = selectedCandidateForProject(env, project.id);
     const info = dbQuery(
       env,
-      "INSERT INTO videos (project_id, file_name, duration, title, description, tags) VALUES (?, ?, ?, ?, ?, ?)",
-      [project.id, outName, duration, titreYoutube, description, JSON.stringify(hashtags)],
+      "INSERT INTO videos (project_id, file_name, duration, title, description, tags, topic_candidate_id, hook_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [project.id, outName, duration, titreYoutube, description, JSON.stringify(hashtags), candidate?.id ?? null, scriptRow?.hook_id ?? null],
     ).run();
+    const videoId = Number(info.lastInsertRowid);
+    linkVideoCategories(env, videoId, candidate?.id ?? null);
     // Purge des anciennes videos non gardees du projet : seules celles en bibliotheque survivent.
     const oldVids = dbQuery(
       env,
@@ -296,6 +621,13 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
     // Le titre genere devient le titre de la card projet.
     dbQuery(env, "UPDATE projects SET title = ?, status = 'done' WHERE id = ?", [titreYoutube, project.id]).run();
     touchUpdated(env, project.id);
+    logContentEvent("VIDEO_GENERATED", {
+      userId: project.user_id,
+      projectId: project.id,
+      videoId: Number(info.lastInsertRowid),
+      topicCandidateId: candidate?.id ?? undefined,
+      hookId: scriptRow?.hook_id ?? undefined,
+    });
     jobs.set(key, { step: "done", progress: 1, running: false });
     return Number(info.lastInsertRowid);
   } catch (e) {
@@ -305,49 +637,80 @@ async function startVideoRender(env: ServerEnv, project: ProjectRowLite, jobs: J
   }
 }
 
-async function runFullCreation(env: ServerEnv, project: ProjectRowLite, jobs: Jobs = new Map(), requestedVoice?: string, voiceRate?: string, voicePitch?: string): Promise<number> {
+async function runFullCreation(env: ServerEnv, project: ProjectRowLite, jobs: Jobs = new Map(), requestedVoice?: string, voiceRate?: string, voicePitch?: string, languageOverride?: string): Promise<number> {
   const key = project.id;
   const setJob = (step: string, progress: number) => jobs.set(key, { step, progress, running: true });
   setJob("preparation", 0.02);
   try {
     const config = loadConfig();
-    const llm = createLlm(config);
+    const { generator, judge } = createContentLlms(config);
+    const ceConfig = loadContentEngineConfig();
+    // Langue effective : regle d'automatisation > langue du compte > config globale.
+    const lang = (languageOverride ?? "").trim() || resolveLanguage(env, project.user_id, config.language);
 
-    // 1) IDEES (si auto et aucune)
+    // 1) IDEES (si auto et aucune) : generator (DeepSeek)
     if (project.mode === "auto" && getIdeas(env, project.id).length === 0) {
       setJob("ideas", 0.08);
       const usedTopics = getUsedTopics(env, project.user_id);
-      const raw = await llm.complete(getVideoType(project.video_type).messagesIdees({ topic: project.topic, nIdeas: config.nIdeas, language: config.language, usedTopics }));
-      const { idees } = extractJson<IdeasResult>(raw);
+      const raw = await generator.complete(getVideoType(project.video_type).messagesIdees({ topic: project.topic, nIdeas: config.nIdeas, language: lang, usedTopics }));
+      const { idees } = parseLlmJson(ideasResultSchema, raw, "idees");
       dbQuery(env, "DELETE FROM ideas WHERE project_id = ?", [project.id]).run();
       const ins = dbQuery(env, "INSERT INTO ideas (project_id, position, idea_text, titre, hook, angle, fond) VALUES (?, ?, ?, ?, ?, ?, ?)");
       idees.forEach((id, i) => ins.run(project.id, i + 1, id.sujet, id.titre ?? null, id.hook ?? null, id.angle ?? null, id.fond ?? null));
       recordTopics(env, project.user_id, idees.map((id) => id.sujet));
+      archiveProjectCandidates(env, project.id, "superseded: regeneration d'idees");
+      await persistScoredCandidates(env, project, idees, judge, lang);
     }
 
-    // 2) selectionner la meilleure idee (premiere) si auto
+    // 2) selection (si auto) : hooks top K + juge = couple gagnant
     let proj = getProjectRow(env, project.id, project.user_id) as unknown as ProjectRowLite;
     const ideasNow = getIdeas(env, project.id);
+    let selectedHook: { hookId: number | null; hookText: string | null } = { hookId: null, hookText: null };
     if (proj.mode === "auto" && ideasNow.length > 0 && !proj.selected_idea_id) {
-      dbQuery(env, "UPDATE projects SET selected_idea_id = ? WHERE id = ?", [ideasNow[0].id, project.id]).run();
+      selectedHook = await runAutoContentSelection(env, project, generator, judge, lang, ceConfig);
       proj = getProjectRow(env, project.id, project.user_id) as unknown as ProjectRowLite;
     }
 
-    // 3) SCRIPT
-    if (getScripts(env, project.id).length === 0) {
+    // 3) SCRIPT (juge) + fact-check (regénéré si l'idée sélectionnée est plus récente)
+    const regen3 = decideRegeneration(gatherRegenInputs(env, proj));
+    if (regen3.regenScript) {
+      deleteProjectVoices(env, project.id, config.outputDir);
+      dbQuery(env, "DELETE FROM scripts WHERE project_id = ?", [project.id]).run();
       setJob("script", 0.25);
       const ideaText = proj.selected_idea_id
         ? ((dbQuery(env, "SELECT idea_text FROM ideas WHERE id = ? AND project_id = ?", [proj.selected_idea_id, project.id]).get() as { idea_text: string } | undefined)?.idea_text ?? proj.topic)
         : proj.topic;
-      const raw = await llm.complete(getVideoType(project.video_type).messagesScript({ idea: ideaText, language: config.language }));
-      const script = extractJson<ScriptResult>(raw);
-      const info = dbQuery(env, "INSERT INTO scripts (project_id, script_json) VALUES (?, ?)", [project.id, JSON.stringify(script)]).run();
+      // Hors selection auto (manuel ou repli) : hooks pour le candidat choisi.
+      let hookId = selectedHook.hookId;
+      let hookText = selectedHook.hookText;
+      if (hookId == null && proj.selected_idea_id) {
+        const candidate = candidateForIdea(env, project.id, proj.selected_idea_id);
+        if (candidate) {
+          const bundle = await ensureHooksForCandidate(env, candidate, generator, judge, lang, ceConfig.hookScoring);
+          if (bundle.bestHookId != null) {
+            markHookSelected(env, bundle.bestHookId);
+            hookId = bundle.bestHookId;
+            hookText = bestHookText(env, candidate.id);
+          }
+        }
+      }
+      const { script } = await generateScriptWithFactCheck(env, project, getVideoType(project.video_type), ideaText, hookText, lang, judge, generator);
+      const info = dbQuery(env, "INSERT INTO scripts (project_id, script_json, hook_id) VALUES (?, ?, ?)", [project.id, JSON.stringify(script), hookId ?? null]).run();
       dbQuery(env, "UPDATE projects SET status = 'script', selected_script_id = ? WHERE id = ?", [Number(info.lastInsertRowid), project.id]).run();
+      logContentEvent("SCRIPT_GENERATED", {
+        userId: project.user_id,
+        projectId: project.id,
+        hookId: hookId ?? undefined,
+        data: { scriptId: Number(info.lastInsertRowid) },
+      });
       proj = getProjectRow(env, project.id, project.user_id) as unknown as ProjectRowLite;
     }
 
-    // 4) VOIX
-    if (getVoices(env, project.id).length === 0) {
+    // 4) VOIX (regénérée si le script sélectionné est plus récent, ou si la voix
+    // est liée à un autre script)
+    const regen4 = decideRegeneration(gatherRegenInputs(env, proj));
+    if (regen4.regenVoice) {
+      deleteProjectVoices(env, project.id, config.outputDir);
       setJob("voice", 0.55);
       const scriptId = proj.selected_script_id ?? (getScripts(env, project.id)[0]?.id ?? null);
       const scriptRow = scriptId
@@ -381,8 +744,9 @@ async function runFullCreation(env: ServerEnv, project: ProjectRowLite, jobs: Jo
   }
 }
 
-export function workflowRouter(env: ServerEnv): Router {
+export function workflowRouter(env: ServerEnv, opts: { renderFn?: RenderFn } = {}): Router {
   const router = Router();
+  const renderFn = opts.renderFn ?? startVideoRender;
 
   // --- 1) Generer les IDEES ---
   router.post("/projects/:id/ideas", asyncHandler(async (req, res) => {
@@ -390,12 +754,13 @@ export function workflowRouter(env: ServerEnv): Router {
     if (!project) throw new ApiError(404, "Project not found");
 
     const config = loadConfig();
-    const llm = createLlm(config);
+    const { generator, judge } = createContentLlms(config);
+    const lang = resolveLanguage(env, req.auth!.userId, config.language);
     const usedTopics = getUsedTopics(env, req.auth!.userId);
-    const raw = await llm.complete(
-      getVideoType(project.video_type).messagesIdees({ topic: project.topic, nIdeas: config.nIdeas, language: config.language, usedTopics }),
+    const raw = await generator.complete(
+      getVideoType(project.video_type).messagesIdees({ topic: project.topic, nIdeas: config.nIdeas, language: lang, usedTopics }),
     );
-    const { idees } = extractJson<IdeasResult>(raw);
+    const { idees } = parseLlmJson(ideasResultSchema, raw, "idees");
 
     // Vide les anciennes idees (regeneration) puis insere.
     dbQuery(env, "DELETE FROM ideas WHERE project_id = ?", [project.id]).run();
@@ -404,10 +769,21 @@ export function workflowRouter(env: ServerEnv): Router {
       insert.run(project.id, i + 1, id.sujet, id.titre ?? null, id.hook ?? null, id.angle ?? null, id.fond ?? null);
     });
     recordTopics(env, req.auth!.userId, idees.map((id) => id.sujet));
+    archiveProjectCandidates(env, project.id, "superseded: regeneration d'idees");
+    await persistScoredCandidates(env, project as unknown as ProjectRowLite, idees, judge, lang);
     dbQuery(env, "UPDATE projects SET status = 'ideas' WHERE id = ?", [project.id]).run();
     touchUpdated(env, project.id);
 
-    res.json({ ideas: getIdeas(env, project.id), status: "ideas" });
+    // Tri par score (Gemini) : les meilleures idees en premier, scores visibles.
+    const scores = candidateScoreMap(env, project.id);
+    const ranked = getIdeas(env, project.id)
+      .map((idea) => {
+        const s = scores.get(idea.ideaText);
+        return { ...idea, totalScore: s?.total ?? null, scoreStatus: s?.status ?? null };
+      })
+      .sort((a, b) => (b.totalScore ?? -1) - (a.totalScore ?? -1));
+
+    res.json({ ideas: ranked, status: "ideas" });
   }));
 
   // --- 2) Selectionner une idee ---
@@ -420,7 +796,17 @@ export function workflowRouter(env: ServerEnv): Router {
     const idea = dbQuery(env, "SELECT id FROM ideas WHERE id = ? AND project_id = ?", [parsed.data.ideaId, project.id]).get();
     if (!idea) throw new ApiError(404, "Idea not found");
 
-    dbQuery(env, "UPDATE projects SET selected_idea_id = ? WHERE id = ?", [parsed.data.ideaId, project.id]).run();
+    dbQuery(env, "UPDATE projects SET selected_idea_id = ?, selected_script_id = NULL, selected_voice_id = NULL, status = 'ideas' WHERE id = ?", [parsed.data.ideaId, project.id]).run();
+    const candidate = candidateForIdea(env, project.id, parsed.data.ideaId);
+    if (candidate) {
+      markCandidateSelected(env, candidate.id);
+      logContentEvent("TOPIC_SELECTED", {
+        userId: req.auth!.userId,
+        projectId: project.id,
+        topicCandidateId: candidate.id,
+        data: { auto: false },
+      });
+    }
     touchUpdated(env, project.id);
     res.json({ ok: true });
   }));
@@ -436,13 +822,32 @@ export function workflowRouter(env: ServerEnv): Router {
     if (!ideaText) throw new ApiError(400, "Select an idea first");
 
     const config = loadConfig();
-    const llm = createLlm(config);
-    const raw = await llm.complete(getVideoType(project.video_type).messagesScript({ idea: ideaText, language: config.language }));
-    const script = extractJson<ScriptResult>(raw);
+    const { generator, judge } = createContentLlms(config);
+    const ceConfig = loadContentEngineConfig();
+    const lang = resolveLanguage(env, req.auth!.userId, config.language);
+    // Hooks pour le candidat choisi manuellement, puis script par le juge + fact-check.
+    let hookId: number | null = null;
+    let hookText: string | null = null;
+    const candidate = project.selected_idea_id ? candidateForIdea(env, project.id, project.selected_idea_id) : null;
+    if (candidate) {
+      const bundle = await ensureHooksForCandidate(env, candidate, generator, judge, lang, ceConfig.hookScoring);
+      if (bundle.bestHookId != null) {
+        markHookSelected(env, bundle.bestHookId);
+        hookId = bundle.bestHookId;
+        hookText = bestHookText(env, candidate.id);
+      }
+    }
+    const { script } = await generateScriptWithFactCheck(env, project as unknown as ProjectRowLite, getVideoType(project.video_type), ideaText, hookText, lang, judge, generator);
 
     dbQuery(env, "DELETE FROM scripts WHERE project_id = ?", [project.id]).run();
-    const info = dbQuery(env, "INSERT INTO scripts (project_id, script_json) VALUES (?, ?)", [project.id, JSON.stringify(script)]).run();
-    dbQuery(env, "UPDATE projects SET status = 'script', selected_script_id = ? WHERE id = ?", [Number(info.lastInsertRowid), project.id]).run();
+    const info = dbQuery(env, "INSERT INTO scripts (project_id, script_json, hook_id) VALUES (?, ?, ?)", [project.id, JSON.stringify(script), hookId ?? null]).run();
+    dbQuery(env, "UPDATE projects SET status = 'script', selected_script_id = ?, selected_voice_id = NULL WHERE id = ?", [Number(info.lastInsertRowid), project.id]).run();
+    logContentEvent("SCRIPT_GENERATED", {
+      userId: req.auth!.userId,
+      projectId: project.id,
+      hookId: hookId ?? undefined,
+      data: { scriptId: Number(info.lastInsertRowid) },
+    });
     touchUpdated(env, project.id);
 
     res.json({ script, scripts: getScripts(env, project.id), status: "script" });
@@ -537,7 +942,9 @@ export function workflowRouter(env: ServerEnv): Router {
   router.post("/projects/:id/video", asyncHandler(async (req, res) => {
     const project = getProjectRow(env, Number(req.params.id), req.auth!.userId);
     if (!project) throw new ApiError(404, "Project not found");
-    startVideoRender(env, project, renderJobs);
+    const running = renderJobs.get(project.id);
+    if (running?.running) throw new ApiError(409, "A render is already running for this project");
+    renderFn(env, project, renderJobs).catch(() => undefined);
     res.status(202).json({ started: true });
   }));
 
@@ -582,6 +989,8 @@ export function workflowRouter(env: ServerEnv): Router {
   router.post("/projects/:id/full", asyncHandler(async (req, res) => {
     const project = getProjectRow(env, Number(req.params.id), req.auth!.userId);
     if (!project) throw new ApiError(404, "Project not found");
+    const running = renderJobs.get(project.id);
+    if (running?.running) throw new ApiError(409, "A render is already running for this project");
     const body = (req.body ?? {}) as { voiceName?: string; voiceRate?: number; voicePitch?: number };
     const voiceName = typeof body.voiceName === "string" && body.voiceName ? body.voiceName : undefined;
     const rate = typeof body.voiceRate === "number" ? toRate(body.voiceRate) : undefined;
@@ -595,6 +1004,17 @@ export function workflowRouter(env: ServerEnv): Router {
     const config = loadConfig();
     const voix = await listerVoix(config.language);
     res.json({ voices: voix });
+  }));
+
+  // --- Configuration effective du moteur (poids, seuils, exploration) ---
+  router.get("/content-engine/config", asyncHandler(async (_req, res) => {
+    res.json({ config: loadContentEngineConfig() });
+  }));
+
+  // --- Recommandation du prochain contenu (learning, lot 7) ---
+  router.get("/content-engine/recommendation", asyncHandler(async (req, res) => {
+    const report = computeAndPersistRecommendation(env, req.auth!.userId);
+    res.json(report);
   }));
 
   return router;
@@ -618,9 +1038,9 @@ function getProjectById(env: ServerEnv, projectId: number): ProjectRowLite | nul
 export async function generateProject(
   env: ServerEnv,
   projectId: number,
-  opts?: { voiceName?: string; rate?: string; pitch?: string },
+  opts?: { voiceName?: string; rate?: string; pitch?: string; language?: string },
 ): Promise<number> {
   const project = getProjectById(env, projectId);
   if (!project) throw new Error(`Project ${projectId} not found`);
-  return runFullCreation(env, project, new Map(), opts?.voiceName, opts?.rate, opts?.pitch);
+  return runFullCreation(env, project, new Map(), opts?.voiceName, opts?.rate, opts?.pitch, opts?.language);
 }

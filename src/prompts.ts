@@ -1,33 +1,28 @@
 import type { LlmMessage } from "./llm/types.js";
 
 // ============================================================
-// CULTURE GENERAL PROMPTS - optimized for Shorts retention.
-// Goals :
-//  - high-discovery topics (unusual fact, number, debunked myth,
-//    useful tip) - 100% safe
-//  - UNIVERSAL HOOK in the 1-2nd second (English content)
-//  - LOCKED duration 25-35s (word budget) - the retention rule
-//  - LOOP : the ending echoes the hook to trigger rewatch
-//  - optional short CTA, NEVER after the ending (keeps the loop)
+// CULTURE GENERAL PROMPTS - structures pour la retention.
+// Contrat : langue imposée par le parametre `language` (jamais
+// fixée dans le prompt), durée adaptative au sujet (aucune cible
+// 25-35s), pas de boucle finale obligatoire, faits honnêtes et
+// vérifiables, hook qui tient la promesse du contenu réel.
 // ============================================================
 
 const COMMON_RULES = `
-You are an expert copywriter for viral short videos (Shorts / Reels / TikTok).
-You write in ENGLISH, engaging tone, credible, appealing to a broad audience.
-- SINGLE LANGUAGE ENGLISH : the title, title_youtube, hook, narration body and
-  description are ALWAYS in English. NEVER a word, title or sentence in another
-  language, even mixed. If you hesitate, translate into English.
+You are an expert copywriter for short-form science and curiosity videos (Shorts / Reels / TikTok).
+Credible, precise, engaging, appealing to a broad audience.
+- LANGUAGE : write in the language given in the user message ("Language : ...").
+  Use ONLY that language for titre, titre_youtube, hook, narration and
+  description. NEVER mix languages, never switch mid-text.
 
 PACKAGING - TITLE, DESCRIPTION, HASHTAGS :
 - titre_youtube : SEO + catchy. Front-load the main keyword, keep it under 70
   characters, no clickbait lie, no ALL-CAPS spam.
 - description : 2-3 punchy sentences that hook the viewer, deliver the value,
   and end with a soft CTA ("Follow for more"). No hashtags inside the text.
-- hashtags : EXACTLY 3-5 tags. Mix 1 broad discovery tag (fyp or viral) with
-  2-4 niche tags that MATCH the video topic. Best niche tags for this content :
-  didyouknow, facts, learnontiktok, edutok, sciencefacts, randomfacts,
-  interestingfacts, mindblown, knowledge, curiosity, education, tiktokfacts.
-  Never generic filler - the tags must describe THIS video.
+- hashtags : EXACTLY 3-5 tags. Mix 1 broad discovery tag with 2-4 niche tags
+  that MATCH the video topic. Never generic filler - the tags must describe
+  THIS video.
 
 STRICT NICHE - CULTURE GENERAL :
 - ALLOWED TOPICS : unusual facts, surprising numbers, debunked myths, useful tips.
@@ -39,28 +34,21 @@ ABSOLUTE RULES (non-negotiable) :
 - SAFE CONTENT : nothing illegal, dangerous, shocking, defamatory, political,
   religious, dubious health advice, or sexual. If a topic drifts toward a
   sensitive area, drop it and pick a 100% safe angle.
-- HOOK in the 1-2nd SECOND : one sentence that stops the scroll with a number,
+- HOOK in the first seconds : one sentence that stops the scroll with a number,
   a contradiction or a curiosity tension. NO "hello, today", NO lazy
   "did you know...". A single sentence, MAX 12 words.
-- MANDATORY HOOK OPENER (NON-NEGOTIABLE) : the hook MUST start with the
-  second-person "Your" or "You". The VERY FIRST word spoken in the video MUST
-  be "Your" or "You". This is not optional. If the fact cannot naturally start
-  that way, RE-ANGLE it onto the viewer's body, brain, home, food, phone, sleep
-  or daily life so it can. Examples :
-  "Your body replaces 50 billion cells every second."
-  "You lose half your taste buds by 60."
-  "Your phone carries more bacteria than a toilet seat."
-  The hook still needs a number, a contradiction or a curiosity tension after
-  the opener. NO descriptive statement, NO "did you know".
-- UNIVERSAL HOOK : no imposed language, no divisive tone, no excluding cultural
-  reference. The content must capture everyone.
-- RETENTION : short sentences, fast rhythm, ONE strong idea per sentence.
-- DURATION : the narration must fit in 25 to 35 seconds. Budget MAX ~140 words
-  for texte_continu (about 4.3 words/s). ZERO filler, ZERO digression, ZERO
-  list-of-three for decoration.
-- LOOP : the ENDING (last sentence) must ECHO the opening hook to trigger the
-  rewatch. texte_continu STARTS with the exact hook sentence and ENDS with the
-  ending.
+- HONESTY : state only verifiable facts. NO invented statistics, no fake
+  precision, no absolute claims you cannot back ("always", "never",
+  "impossible"). If a claim is disputed or approximate, soften it explicitly.
+  No clickbait lie : the hook must match what the video actually delivers.
+- RETENTION : short sentences, fast rhythm, ONE strong idea per sentence, new
+  information regularly, questions the viewer implicitly asks, a real payoff.
+- DURATION : choose the duration the topic actually needs. Dense topics can be
+  short, layered topics longer - but NEVER stretch. Budget roughly 2.5 to 4.3
+  words per second. ZERO filler, ZERO digression, ZERO list-of-three decoration.
+- ENDING : finish on a satisfying payoff : the answer to the hook, or a second
+  surprising layer of information. Echoing the hook is allowed when natural,
+  never forced, never a gimmick.
 - Reply ONLY with valid JSON, no text around it.
 `;
 
@@ -70,8 +58,8 @@ ABSOLUTE RULES (non-negotiable) :
 export interface Idear {
   sujet: string; // the fact / concept of the video (one sentence)
   titre: string; // catchy video title
-  hook: string; // hook sentence for the first 1-2 seconds
-  angle: "curiosite" | "chiffre" | "contraire" | "mythe" | "astuce";
+  hook: string; // hook sentence for the first seconds
+  angle: string; // curiosite | chiffre | contraire | mythe | astuce
   fond: string; // short description of the background visual
 }
 
@@ -93,11 +81,13 @@ export function messagesIdees(opts: {
 Each topic must have a high discovery potential : an unusual fact, a surprising
 number, a myth to debunk, or a useful tip. Choose facts LITTLE KNOWN to the
 general public WITH a real verifiable number. FORBIDDEN overused and beaten
-topics (Eiffel Tower, eternal honey, three-heart octopus, horned vikings, ant,
-penguin, brain/stars...). Forbid thriller/dark approaches. If a topic is given
-as a direction, get inspired by it but vary. Each idea must be THE most
-surprising and the least seen possible. Choose facts that trigger the "I didn't
-know that" or "that's impossible" : the viewer must want to share or comment.
+topics (Eiffel Tower, eternal honey, three-heart octopus, bees' dance, lightning
+hotter than the sun, horned vikings, ant, penguin, brain/stars...). Forbid
+thriller/dark approaches. If a topic is given as a direction, get inspired by it
+but vary. Each idea must be THE most surprising and the least seen possible.
+Choose facts that trigger the "I didn't know that" or "that's impossible" : the
+viewer must want to share or comment. Prefer a SECOND-LEVEL angle : the
+surprising mechanism or consequence behind a fact, not just the bare fact.
 Avoid bland facts, obvious tips and things everyone already knows.`;
   const directive = hasTopic
     ? `Direction / general theme (optional, get inspired by it) : "${topic}"`
@@ -113,7 +103,7 @@ Reply with this exact JSON schema :
   "idees": [
     { "sujet": "the fact / concept in one sentence",
       "titre": "catchy title that makes people click",
-      "hook": "THE HOOK (one sentence, max 12 words) : MUST START with the exact word 'Your' or 'You' (NON-NEGOTIABLE), then a number, a contradiction or a curiosity tension that stops the scroll",
+      "hook": "THE HOOK (one sentence, max 12 words) : a number, a contradiction or a curiosity tension that stops the scroll",
       "angle": "curiosite | chiffre | contraire | mythe | astuce",
       "fond": "short description of the ideal background visual (1 sentence)" }
   ]
@@ -152,24 +142,35 @@ export interface ScriptResult {
 export function messagesScript(opts: {
   idea: string;
   language?: string;
+  /** Hook selectionne par le Hook Engine (le script DOIT commencer par cette phrase exacte). */
+  hook?: string;
+  /** Corrections du fact-check a respecter imperativement. */
+  feedback?: string;
 }): LlmMessage[] {
-  const { idea, language = "en" } = opts;
+  const { idea, language = "en", hook, feedback } = opts;
+
+  const fixedHook = hook?.trim()
+    ? `\nFIXED HOOK (from the hook engine) : "${hook.trim()}".
+texte_continu MUST start with this EXACT sentence, verbatim, no rephrasing.`
+    : "";
+  const corrections = feedback?.trim()
+    ? `\nCORRECTIONS REQUIRED BY FACT-CHECK (non-negotiable) :\n${feedback.trim()}\nFix these issues in the narration. Never repeat a contested claim.`
+    : "";
 
   const system = COMMON_RULES +
     `\nTurn the idea into a complete short-video script, ready to be read as voiceover.
-Progression :
-- HOOK (1-2s) : the sentence that stops the scroll. THE most important part.
-  It MUST START with the exact word "Your" or "You" (NON-NEGOTIABLE). If the
-  idea cannot naturally start that way, RE-ANGLE it onto the viewer's body,
-  brain, home, food, phone or daily life so the FIRST SPOKEN WORD is "Your" or
-  "You".
-- BODY (12-15s) : the fact, explained with one strong idea per sentence.
-- PROOF (8-10s) : a number, a comparison or an example that validates the hook.
-- ENDING (4-6s) : the LOOP. The last sentence echoes the opening hook to push rewatch.
+Structure (adapt the timing to the topic - NO fixed total duration) :
+- HOOK (first seconds) : the sentence that stops the scroll. THE most important
+  part. It states the tension or the question the video will resolve, and it
+  must match what the video actually delivers.
+- BODY : the fact, explained with one strong idea per sentence.
+- PROOF : a number, a comparison or an example that validates the hook.
+- ENDING : a satisfying payoff (the answer to the hook, or a second surprising
+  layer of information).
 - CTA (optional, MAX 2s) : ONE short sentence ("Subscribe"). Place it BEFORE the
   ending, NEVER after - the last thing heard must be the ending.
-texte_continu MUST start with the exact hook sentence, then flow, and END with
-the ending. Total target duration : 25-35s, budget MAX ~140 words.`;
+texte_continu STARTS with the exact hook sentence, then flows, and ENDS with the
+ending. Choose the duration the topic actually needs - NEVER stretch with filler.${fixedHook}${corrections}`;
 
   const user = `Idea to develop : "${idea}"
 Language : ${language}
@@ -177,12 +178,12 @@ Reply with this exact JSON schema :
 {
   "titre": "short punchy title (internal use)",
   "titre_youtube": "YouTube-optimized title : catchy, SEO, rephrased from the hook, maximum 100 characters",
-  "hook": "THE HOOK alone (one sentence, max 12 words) : MUST START with the exact word 'Your' or 'You' (NON-NEGOTIABLE), then a number, a contradiction or a curiosity tension that stops the scroll",
-  "duree": "approximate narration duration, ex \"32s\"",
-  "texte_continu": "the COMPLETE narration in one paragraph (MAX ~140 words), ready for speech synthesis. The VERY FIRST WORD MUST be 'Your' or 'You'. STARTS with the EXACT hook sentence, then flows (body, proof), and ENDS with the ending that echoes the hook",
+  "hook": "THE HOOK alone (one sentence, max 12 words) : a number, a contradiction or a curiosity tension that stops the scroll",
+  "duree": "estimated narration duration of YOUR script (any length the topic needs), ex \\"18s\\"",
+  "texte_continu": "the COMPLETE narration in one paragraph, ready for speech synthesis. STARTS with the EXACT hook sentence, then flows (body, proof), and ENDS with the ending (the payoff)",
   "structure": [
     { "partie": "hook",   "texte": "...", "duree": "3s" },
-    { "partie": "corps",  "texte": "...", "duree": "13s" },
+    { "partie": "corps",  "texte": "...", "duree": "12s" },
     { "partie": "preuve", "texte": "...", "duree": "9s" },
     { "partie": "chute",  "texte": "...", "duree": "5s" }
   ],

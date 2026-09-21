@@ -9,6 +9,7 @@ import { getProjectRow } from "../lib/serialize.js";
 import { loadConfig } from "../../../src/config.js";
 import { decryptString, encryptString } from "../lib/crypto.js";
 import { refreshUserVideoStats } from "../lib/ytStats.js";
+import { logContentEvent } from "../../../src/content-engine/logging.js";
 
 const SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -199,6 +200,12 @@ export async function publishVideo(
   const { youtubeId, url } = await uploadToYoutube(access, filePath, { title, description, tags: finalTags, privacyStatus });
   // Suivi : id YouTube + video gardee (jamais purgee apres publication).
   dbQuery(env, "UPDATE videos SET youtube_id = ?, kept = 1 WHERE id = ?", [youtubeId, videoId]).run();
+  logContentEvent("VIDEO_PUBLISHED", {
+    userId,
+    projectId: Number(row.project_id),
+    videoId,
+    data: { youtubeId, privacyStatus },
+  });
   return { youtubeId, url };
 }
 

@@ -44,6 +44,7 @@ function serializeAutomation(r: AutomationRow) {
     topic: r.topic || "",
     privacy: r.privacy || "unlisted",
     timezone: r.timezone || "UTC",
+    language: r.language || null,
     musicEnabled: Number(r.music_enabled ?? 0) === 1,
     musicTrack: r.music_track || null,
     musicVolume: r.music_volume != null ? Number(r.music_volume) : null,
@@ -102,8 +103,8 @@ export function automationRouter(env: ServerEnv): Router {
 
     const info = dbQuery(
       env,
-      "INSERT INTO automations (user_id, name, enabled, video_types, per_day, schedule, voice_name, background, text_style, topic, privacy, timezone, music_enabled, music_track, music_volume, sfx_enabled, sfx_intro, sfx_volume, effects_enabled, broll_enabled, voice_rate, voice_pitch) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO automations (user_id, name, enabled, video_types, per_day, schedule, voice_name, background, text_style, topic, privacy, timezone, language, music_enabled, music_track, music_volume, sfx_enabled, sfx_intro, sfx_volume, effects_enabled, broll_enabled, voice_rate, voice_pitch) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         req.auth!.userId,
         d.name,
@@ -117,6 +118,7 @@ export function automationRouter(env: ServerEnv): Router {
         d.topic ?? "",
         d.privacy ?? "unlisted",
         d.timezone ?? "Europe/Paris",
+        d.language ?? null,
         d.musicEnabled === true ? 1 : 0,
         d.musicTrack ?? null,
         d.musicVolume ?? null,
@@ -154,6 +156,7 @@ export function automationRouter(env: ServerEnv): Router {
     if (d.topic !== undefined) push("topic", d.topic ?? "");
     if (d.privacy !== undefined) push("privacy", d.privacy);
     if (d.timezone !== undefined) push("timezone", d.timezone);
+    if (d.language !== undefined) push("language", d.language ?? null);
     if (d.musicEnabled !== undefined) push("music_enabled", d.musicEnabled ? 1 : 0);
     if (d.musicTrack !== undefined) push("music_track", d.musicTrack ?? null);
     if (d.musicVolume !== undefined) push("music_volume", d.musicVolume);

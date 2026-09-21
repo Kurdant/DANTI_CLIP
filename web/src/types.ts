@@ -6,6 +6,9 @@ export interface Idea {
   hook: string | null;
   angle: string | null;
   fond: string | null;
+  /** Score du Topic Engine (0..1), trie par le juge ; null si non evalue. */
+  totalScore?: number | null;
+  scoreStatus?: string | null;
 }
 
 export interface ScriptPart {

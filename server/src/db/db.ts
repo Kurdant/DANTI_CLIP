@@ -182,6 +182,121 @@ export function getDb(env: ServerEnv): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_voices_project  ON voices(project_id);
     CREATE INDEX IF NOT EXISTS idx_videos_project  ON videos(project_id);
     CREATE INDEX IF NOT EXISTS idx_user_topics_user ON user_topics(user_id);
+
+    -- ------------------------------------------------------------
+    -- CONTENT ENGINE (lot 3) : candidats de sujets, hooks, categories.
+    -- Migration additive : ne modifie aucune table existante.
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS topic_candidates (
+      id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id                  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      project_id               INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+      title                    TEXT NOT NULL,
+      idea_text                TEXT NOT NULL,
+      angle                    TEXT NOT NULL DEFAULT '',
+      source                   TEXT NOT NULL DEFAULT 'llm',
+      source_url               TEXT,
+      demand_score             REAL,
+      curiosity_score          REAL,
+      emotional_impact_score   REAL,
+      novelty_score            REAL,
+      visual_score             REAL,
+      comment_score            REAL,
+      share_score              REAL,
+      search_score             REAL,
+      audience_relevance_score REAL,
+      credibility_score        REAL,
+      saturation_score         REAL,
+      banality_score           REAL,
+      follow_up_score          REAL,
+      total_score              REAL,
+      score_version            INTEGER NOT NULL DEFAULT 1,
+      score_detail             TEXT,
+      status                   TEXT NOT NULL DEFAULT 'candidate'
+                             CHECK (status IN ('candidate','selected','rejected','used')),
+      created_at               TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_topic_candidates_user    ON topic_candidates(user_id);
+    CREATE INDEX IF NOT EXISTS idx_topic_candidates_project ON topic_candidates(project_id);
+
+    CREATE TABLE IF NOT EXISTS hooks (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic_candidate_id     INTEGER NOT NULL REFERENCES topic_candidates(id) ON DELETE CASCADE,
+      hook_text              TEXT NOT NULL,
+      pattern                TEXT,
+      curiosity_score        REAL,
+      clarity_score          REAL,
+      specificity_score      REAL,
+      surprise_score         REAL,
+      emotional_impact_score REAL,
+      open_loop_score        REAL,
+      credibility_score      REAL,
+      scroll_stopping_score  REAL,
+      total_score            REAL,
+      score_version          INTEGER NOT NULL DEFAULT 1,
+      score_detail           TEXT,
+      status                 TEXT NOT NULL DEFAULT 'candidate'
+                           CHECK (status IN ('candidate','selected','rejected')),
+      created_at             TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_hooks_candidate ON hooks(topic_candidate_id);
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug        TEXT UNIQUE NOT NULL,
+      label       TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS topic_categories (
+      topic_candidate_id INTEGER NOT NULL REFERENCES topic_candidates(id) ON DELETE CASCADE,
+      category_id        INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      PRIMARY KEY (topic_candidate_id, category_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS video_categories (
+      video_id    INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+      category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      PRIMARY KEY (video_id, category_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS video_stats (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      video_id    INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+      views       INTEGER,
+      likes       INTEGER,
+      comments    INTEGER,
+      source      TEXT NOT NULL DEFAULT 'youtube_data_api',
+      captured_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_video_stats_video ON video_stats(video_id);
+
+    -- Recommandations de contenu persistees (traçabilite des decisions).
+    CREATE TABLE IF NOT EXISTS content_decisions (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      decision_json TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_content_decisions_user ON content_decisions(user_id);
+
+    -- Familles de contenu (phase 14) : seed stable, multi-categories par contenu.
+    INSERT OR IGNORE INTO categories (slug, label) VALUES
+      ('body', 'Body'),
+      ('psychology', 'Psychology'),
+      ('animals', 'Animals'),
+      ('space', 'Space'),
+      ('everyday_science', 'Everyday Science'),
+      ('tech', 'Tech'),
+      ('weird_history', 'Weird History'),
+      ('dangerous_science', 'Dangerous Science'),
+      ('human_behavior', 'Human Behavior'),
+      ('nature', 'Nature');
   `);
 
   // Seed memoire des sujets : alimente `user_topics` avec les sujets deja
@@ -280,6 +395,14 @@ export function getDb(env: ServerEnv): DatabaseSync {
   ensureCol("videos", "comments", "ALTER TABLE videos ADD COLUMN comments INTEGER;");
   ensureCol("videos", "stats_updated_at", "ALTER TABLE videos ADD COLUMN stats_updated_at TEXT;");
   ensureCol("videos", "stats_status", "ALTER TABLE videos ADD COLUMN stats_status TEXT;");
+  // Migration : CONTENT ENGINE - liaison videos -> candidat / hook (lot 3).
+  ensureCol("videos", "topic_candidate_id", "ALTER TABLE videos ADD COLUMN topic_candidate_id INTEGER REFERENCES topic_candidates(id) ON DELETE SET NULL;");
+  ensureCol("videos", "hook_id", "ALTER TABLE videos ADD COLUMN hook_id INTEGER REFERENCES hooks(id) ON DELETE SET NULL;");
+  // Migration : CONTENT ENGINE - hook selectionne pour le script (lot 4).
+  ensureCol("scripts", "hook_id", "ALTER TABLE scripts ADD COLUMN hook_id INTEGER REFERENCES hooks(id) ON DELETE SET NULL;");
+  // Migration : CONTENT ENGINE - langue par compte et par regle (lot 7, revue BYAN M4).
+  ensureCol("users", "language", "ALTER TABLE users ADD COLUMN language TEXT;");
+  ensureCol("automations", "language", "ALTER TABLE automations ADD COLUMN language TEXT;");
 
   db = instance;
   return instance;

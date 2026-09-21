@@ -2,7 +2,7 @@
 import { loadConfig } from "./config.js";
 import { createLlm } from "./llm/index.js";
 import { messagesIdees } from "./prompts.js";
-import { extractJson } from "./llm/openai.js";
+import { parseLlmJson, ideasResultSchema } from "./llm/schemas.js";
 import { listerVoix } from "./voice.js";
 import { genererShort } from "./pipeline.js";
 
@@ -54,7 +54,7 @@ async function main() {
     }
     console.log(`\nGeneration d'idees pour : "${topic}" (provider=${llm.name})\n`);
     const raw = await llm.complete(messagesIdees({ topic, nIdeas: config.nIdeas, language: config.language }));
-    const { idees } = extractJson<{ idees: { sujet: string; titre: string; hook: string; fond: string }[] }>(raw);
+    const { idees } = parseLlmJson(ideasResultSchema, raw, "idees");
     idees.forEach((id, i) => {
       console.log(`[${i + 1}] ${id.titre || id.sujet}`);
       console.log(`    SUJET : ${id.sujet}`);

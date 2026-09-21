@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "tiktok-content-engine",
+  "agent": {
+    "tiktok-content-engine": {
+      "description": "Ingénieur logiciel senior chargé de reprendre DANTI_CLIP et de réaliser le TikTok Content Engine : audit complet, architecture compatible, discovery/scoring/angles/hooks, analytics et apprentissage, implémentation P0 testée selon le prompt intégral de Yan.",
+      "mode": "primary",
+      "prompt": "{file:./_byan-output/bmb-creations/tiktok-content-engine/activation.md}\n\n{file:./_byan-output/bmb-creations/tiktok-content-engine/prompt-original.md}",
+      "permission": {
+        "edit": {
+          "**/_byan-output/bmb-creations/tiktok-content-engine/prompt-original.md": "ask"
+        }
+      }
+    }
+  }
+}
